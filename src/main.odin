@@ -6,6 +6,7 @@ import "core:fmt"
 Algorithm :: enum {
 	Drunkards_Walk,
 	BSP,
+	Cellular_Automata,
 }
 
 main :: proc() {
@@ -32,15 +33,20 @@ main :: proc() {
 			algorithm = .BSP
 			dungeon = make_dungeon_bsp()
 		}
+		if rl.IsKeyPressed(.THREE) {
+			free_dungeon(&dungeon)
+			algorithm = .Cellular_Automata
+			dungeon = make_dungeon_ca()
+		}
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
 		draw_dungeon(&dungeon)
 
 		// Draw mode label
-		mode_text := algorithm == .Drunkards_Walk ? "Drunkard's Walk" : "BSP"
+		mode_text := algorithm == .Drunkards_Walk ? "Drunkard's Walk" : algorithm == .BSP ? "BSP" : "Cellular Automata"
 		rl.DrawText(
-			fmt.ctprintf("%s - Space: Regen | 1: Drunkards | 2: BSP", mode_text),
+			fmt.ctprintf("%s - Space: Regen | 1: DW | 2: BSP | 3: CA", mode_text),
 			10, 10, 20, rl.WHITE,
 		)
 
@@ -54,6 +60,8 @@ make_dungeon_by_algorithm :: proc(algo: Algorithm) -> Dungeon_Map {
 		return make_dungeon()
 	case .BSP:
 		return make_dungeon_bsp()
+	case .Cellular_Automata:
+		return make_dungeon_ca()
 	}
 	return make_dungeon()
 }
