@@ -1,43 +1,83 @@
 package dungeon_visualizer
 
+// =============================================================================
+// CELLULAR AUTOMATA CAVE GENERATION
+// =============================================================================
+// Uses Conway's Game of Life-style rules to generate organic caves.
+// Algorithm:
+//   1. Random wall initialization (~45% walls, 55% floor)
+//   2. Iterate N times: apply neighbor rules (if 4+ wall neighbors → wall)
+//   3. Remove isolated regions via flood-fill, keep largest cave
+//
+// Pros: Organic, connected, natural-looking caves, tuneable parameters
+// Cons: Takes multiple iterations, less structured than BSP, may be isolated
+// Best for: Natural caves, monster lairs, organic level variety
+// =============================================================================
+
 import "core:math/rand"
 import "core:time"
 
+// CA_Config controls cellular automata generation behavior
+// initial_fill:  Probability [0.0, 1.0] that a tile starts as wall (~0.45)
+// generations:   Number of iterations to apply rules (4-6 is typical)
+// wall_threshold: If neighbor wall count >= this, tile becomes wall (usually 4)
+//
+// Tuning tips:
+//   - Higher initial_fill → denser caves, slower generation
+//   - More generations → smoother, more carved out caves
+//   - Higher wall_threshold → more walls, fewer caves
 CA_Config :: struct {
 	initial_fill: f32,     // 0.4 = 40% walls initially
 	generations: int,      // How many iterations to run
 	wall_threshold: int,   // Walls if neighbors >= this
 }
 
+// CA_DEFAULT_CONFIG: reasonable defaults for cave generation
+// ~45% walls initially, 4 generations, 4 neighbor threshold
+// Results in interconnected cave system with natural-looking patterns
 CA_DEFAULT_CONFIG :: CA_Config{
 	initial_fill = 0.45,
 	generations = 4,
 	wall_threshold = 4,
 }
 
+// make_dungeon_ca is the public entry point for CA cave generation
+// Coordinates the full CA pipeline:
+//   1. Random wall/floor initialization
+//   2. Iterative rule application (smooth the map)
+//   3. Isolation removal (keep only largest connected region)
+// Returns a complete Dungeon_Map ready for rendering/gameplay
 make_dungeon_ca :: proc(config := CA_DEFAULT_CONFIG) -> Dungeon_Map {
+	// Seed RNG with nanosecond timestamp
 	t := time.now()._nsec
 	rand.reset(u64(t))
 
+	// Initialize dungeon and allocate tile grid
 	dungeon := Dungeon_Map{
 		width  = MAP_WIDTH,
 		height = MAP_HEIGHT,
-		rooms  = make([dynamic]Room),
+		rooms  = make([dynamic]Room),  // Not used by CA generation
 	}
 	dungeon.tiles = make([][]Tile_Type, MAP_HEIGHT)
 	for y in 0..<MAP_HEIGHT {
 		dungeon.tiles[y] = make([]Tile_Type, MAP_WIDTH)
+		// All tiles start as .Wall (zero-initialized)
 	}
 
-	// Random initialization
+	// Phase 1: Random wall/floor distribution
+	// Creates noisy starting state (~45% walls, 55% floors)
 	ca_initialize(&dungeon, config)
 
-	// Run cellular automata iterations
+	// Phase 2: Smooth via cellular automata
+	// Repeatedly apply neighbor rules to create coherent regions
+	// "If 4+ neighbors are walls, become a wall" creates solid cave walls
 	for _ in 0..<config.generations {
 		ca_iterate(&dungeon, config)
 	}
 
-	// Find and carve the largest cave region
+	// Phase 3: Isolation removal
+	// Find largest connected floor region, fill isolated areas with walls
+	// Guarantees all remaining floors are mutually reachable
 	ca_flood_fill(&dungeon)
 
 	return dungeon
