@@ -20,6 +20,9 @@ main :: proc() {
 	dungeon := make_dungeon()
 	defer free_dungeon(&dungeon)
 
+	// Save counter for exported dungeons
+	save_count := 0
+
 	for !rl.WindowShouldClose() {
 		if rl.IsKeyPressed(.SPACE) {
 			free_dungeon(&dungeon)
@@ -51,6 +54,18 @@ main :: proc() {
 			dungeon = make_dungeon_prefab()
 		}
 
+		// Export current dungeon to file (S key)
+		if rl.IsKeyPressed(.S) {
+			save_count += 1
+			filename := fmt.ctprintf("dungeon_%02d.dun", save_count)
+			success := export_dungeon(&dungeon, filename)
+			if success {
+				fmt.println("Saved:", filename)
+			} else {
+				fmt.println("Failed to save:", filename)
+			}
+		}
+
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
 		draw_dungeon(&dungeon)
@@ -71,7 +86,7 @@ main :: proc() {
 		}
 
 		rl.DrawText(
-			fmt.ctprintf("%s - Space: Regen | 1-5: Algos", mode_text),
+			fmt.ctprintf("%s - Space: Regen | 1-5: Algos | S: Save", mode_text),
 			10, 10, 20, rl.WHITE,
 		)
 
