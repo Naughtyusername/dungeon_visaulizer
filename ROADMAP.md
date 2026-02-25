@@ -1,66 +1,86 @@
 # Dungeon Visualizer Roadmap
 
-## Completed (Milestone 1)
-- ✅ Drunkard's Walk algorithm
-- ✅ BSP (Binary Space Partitioning) algorithm
-- ✅ Cellular Automata caves algorithm
+## Completed (Milestones 1 & 2)
+
+### Generation Algorithms
+- ✅ Drunkard's Walk (organic caves)
+- ✅ BSP (Binary Space Partitioning)
+- ✅ Cellular Automata (evolved caves)
+- ✅ Hybrid (CA + BSP + explicit corridors)
+- ✅ Prefab Rooms (6 hand-crafted templates)
+
+### Core Gameplay Features
+- ✅ Flood fill connectivity validation (ensure reachability)
+- ✅ Spawn point placement (start/goal with distance constraints)
+- ✅ Corridor carvers (L-shaped, straight, waypoint styles)
 - ✅ Real-time algorithm switching
-- ✅ Raylib visualization
-
-## High-Value Next (Milestone 2)
-
-### Core Algorithms
-- **Flood Fill Connectivity Check** (PRIORITY)
-  - Ensure every floor tile is reachable from every other floor tile
-  - Remove isolated regions or connect them
-  - Fundamental technique for roguelikes, critical before shipping
-  - Use case: guarantee playable dungeons
-
-- **Prefab Room Placement**
-  - Hand-designed rooms stored as templates
-  - Place and connect procedurally
-  - Great for landmarks, boss rooms, special areas
-  - High value for 7DRL and narrative-driven games
-
-- **Corridor Carvers**
-  - Explicit L-shaped and straight corridor logic
-  - Connect distant regions intentionally
-  - Currently implicit in BSP; explicit version for CA and Drunkard's Walk
-
-- **Hybrid Generation**
-  - Combine algorithms in one dungeon (e.g., BSP rooms + Drunkard's Walk corridors)
-  - CA caves with prefab rooms stamped in
-  - Where procedural generation gets really interesting
-
-### Spawn & Navigation
-- **Spawn Point Logic**
-  - Place guaranteed start/end points on valid floor
-  - Enforce minimum distance between them
-  - Critical for game integration
+- ✅ Raylib visualization with markers
 
 ### Tooling & Polish
-- **Parameter Tuning UI**
-  - Live sliders for CA iterations, BSP min room size, walk density
-  - Real-time feedback on generation changes
-  - Makes the tool much more explorable
+- ✅ Dungeon statistics display (floor %, rooms, reachability)
+- ✅ Reproducible seeding system (FIXED/RANDOM modes)
+- ✅ JSON export for game integration
+- ✅ Configurable build system (`build.sh`/`build.bat`)
+- ✅ Comprehensive code documentation
+- ✅ Modular architecture (separate .odin files per feature)
 
-- **Export Functionality**
-  - Save generated dungeons (JSON/binary)
-  - Format your actual game can consume
-  - Bridge from visualizer to game engine
+## High-Value Next (Milestone 3)
+
+### User Interface
+- **Parameter Tuning UI** ⚡ RECOMMENDED
+  - Live sliders for generation tweaking
+  - CA iterations (1-8), BSP room size (5-20), corridor width (1-3), prefab count (1-10)
+  - Real-time regeneration as you adjust
+  - **Impact:** Makes exploration and optimization much faster
+  - **Effort:** 1-2 hours
 
 - **Algorithm Comparison Mode**
-  - Same seed, four panels, all algorithms side-by-side
-  - Educational + helps pick best algo for each game
+  - Side-by-side 4-panel view: same seed, all algorithms
+  - Educational + helps pick best algo per game region
+  - **Impact:** Visual understanding of algorithm differences
+  - **Effort:** 2 hours
 
-## Nice-to-Have (Later)
+- **Interactive Prefab Editor**
+  - Visual room designer within the visualizer
+  - Paint tiles, save as prefab template
+  - Export prefabs to code
+  - **Impact:** Remove manual code editing for room design
+  - **Effort:** 2-3 hours
+
+### Game Integration
+- **Enemy/Treasure Spawn Points**
+  - Mark enemy encounter zones
+  - Treasure chest placement hints
+  - Visualization as icons on dungeon
+  - **Impact:** Gameplay design aid
+  - **Effort:** 1 hour
+
+- **Room Type System**
+  - Tag rooms as boss, treasure, safe zone, etc.
+  - Export room metadata with dungeon
+  - Helps game engine place entities
+  - **Effort:** 1-2 hours
+
+## Nice-to-Have (Future)
 - Multi-floor dungeon generation (vertical connectivity)
-- Enemy/treasure spawn point markers
 - Door placement logic
 - Destructible walls / dynamic generation
 - Performance profiling & optimization
-- Seed input/display (reproducible dungeons)
+- Settings file (persist preferences without recompiling)
+- Keyboard seed input (type seed directly)
 
 ---
 
-**Next focus:** What's calling to you from the high-value list?
+## Getting Started with Features
+
+**For game integration right now:**
+- Export dungeons with `S` key → `.dun` files
+- Parse tiles and rooms in your game engine
+- Use spawn points for player placement
+- See [USAGE.md](USAGE.md) (coming soon) for parser examples
+
+**To extend this tool:**
+- All code is modular: pick what you need from `src/`
+- Each algorithm is independent (separate `.odin` files)
+- No external dependencies beyond Raylib vendor bindings
+- Add new algorithms by creating `generator_*.odin` files
