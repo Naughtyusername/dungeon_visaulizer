@@ -1,0 +1,12 @@
+# Ignore the binary named 'roguelike' at the root
+/dv
+
+# Standard Odin ignores
+*.bin
+*.exe
+*.pdb
+*.obj
+*.sav
+*.log
+crash.log
+/saves/*.sav
