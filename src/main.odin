@@ -8,6 +8,7 @@ Algorithm :: enum {
 	BSP,                 // 2: Structured room-based
 	Cellular_Automata,   // 3: Organic cave generation
 	Hybrid,              // 4: CA caves + BSP rooms + explicit corridors
+	Prefab,              // 5: Hand-designed room templates scattered
 }
 
 main :: proc() {
@@ -44,6 +45,11 @@ main :: proc() {
 			algorithm = .Hybrid
 			dungeon = make_dungeon_hybrid()
 		}
+		if rl.IsKeyPressed(.FIVE) {
+			free_dungeon(&dungeon)
+			algorithm = .Prefab
+			dungeon = make_dungeon_prefab()
+		}
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
@@ -60,10 +66,12 @@ main :: proc() {
 			mode_text = "Cellular Automata"
 		case .Hybrid:
 			mode_text = "Hybrid (CA+BSP+Corridors)"
+		case .Prefab:
+			mode_text = "Prefab Rooms"
 		}
 
 		rl.DrawText(
-			fmt.ctprintf("%s - Space: Regen | 1: DW | 2: BSP | 3: CA | 4: Hybrid", mode_text),
+			fmt.ctprintf("%s - Space: Regen | 1-5: Algos", mode_text),
 			10, 10, 20, rl.WHITE,
 		)
 
@@ -81,6 +89,8 @@ make_dungeon_by_algorithm :: proc(algo: Algorithm) -> Dungeon_Map {
 		return make_dungeon_ca()
 	case .Hybrid:
 		return make_dungeon_hybrid()
+	case .Prefab:
+		return make_dungeon_prefab()
 	}
 	return make_dungeon()
 }
