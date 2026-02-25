@@ -2,6 +2,7 @@ package dungeon_visualizer
 
 import rl "vendor:raylib"
 import "core:fmt"
+import "core:math/rand"
 
 Algorithm :: enum {
 	Drunkards_Walk,      // 1: Classic cave carver
@@ -20,38 +21,53 @@ main :: proc() {
 	dungeon := make_dungeon()
 	defer free_dungeon(&dungeon)
 
+	// Gameplay helpers
+	spawn := place_spawn_points(&dungeon)
+	val_result := validate_connectivity(&dungeon, MAP_WIDTH / 2, MAP_HEIGHT / 2, false)
+
+	// Seed system: manual seed control for reproducible dungeons
+	// User can adjust with arrow keys
+	seed: u64 = 12345  // Default seed
+	use_seed := false  // If true, use manual seed instead of time-based
+
 	// Save counter for exported dungeons
 	save_count := 0
 
 	for !rl.WindowShouldClose() {
+		// Helper: regenerate and update gameplay data
+		do_regenerate :: proc(algo: Algorithm, d: ^Dungeon_Map, s: ^SpawnPoints, v: ^ValidationResult, seed_val: u64, use_seed: bool) {
+			// Seed RNG if using manual seed
+			if use_seed {
+				rand.reset(seed_val)
+			}
+			free_dungeon(d)
+			d^ = make_dungeon_by_algorithm(algo)
+			s^ = place_spawn_points(d)
+			v^ = validate_connectivity(d, MAP_WIDTH / 2, MAP_HEIGHT / 2, false)
+		}
+
 		if rl.IsKeyPressed(.SPACE) {
-			free_dungeon(&dungeon)
-			dungeon = make_dungeon_by_algorithm(algorithm)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.ONE) {
-			free_dungeon(&dungeon)
 			algorithm = .Drunkards_Walk
-			dungeon = make_dungeon()
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.TWO) {
-			free_dungeon(&dungeon)
 			algorithm = .BSP
-			dungeon = make_dungeon_bsp()
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.THREE) {
-			free_dungeon(&dungeon)
 			algorithm = .Cellular_Automata
-			dungeon = make_dungeon_ca()
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.FOUR) {
-			free_dungeon(&dungeon)
 			algorithm = .Hybrid
-			dungeon = make_dungeon_hybrid()
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.FIVE) {
-			free_dungeon(&dungeon)
 			algorithm = .Prefab
-			dungeon = make_dungeon_prefab()
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
 		}
 
 		// Export current dungeon to file (S key)
@@ -66,9 +82,33 @@ main :: proc() {
 			}
 		}
 
+		// Seed control: UP/DOWN arrow keys to adjust seed
+		if rl.IsKeyPressed(.UP) {
+			seed += 1
+			use_seed = true
+			// Regenerate with new seed
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+		}
+		if rl.IsKeyPressed(.DOWN) {
+			if seed > 0 {
+				seed -= 1
+			}
+			use_seed = true
+			// Regenerate with new seed
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+		}
+
+		// R: Toggle random vs fixed seed mode
+		if rl.IsKeyPressed(.R) {
+			use_seed = !use_seed
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+		}
+
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
 		draw_dungeon(&dungeon)
+		draw_spawn_points(spawn)
+		draw_dungeon_stats(&dungeon, spawn, val_result)
 
 		// Draw mode label
 		mode_text: cstring
@@ -88,6 +128,16 @@ main :: proc() {
 		rl.DrawText(
 			fmt.ctprintf("%s - Space: Regen | 1-5: Algos | S: Save", mode_text),
 			10, 10, 20, rl.WHITE,
+		)
+
+		// Legend for spawn points
+		rl.DrawText("🟩 Start 🟥 End | Connectivity auto-checked", 10, 35, 14, rl.GRAY)
+
+		// Seed display
+		seed_mode_text := use_seed ? "FIXED" : "RANDOM"
+		rl.DrawText(
+			fmt.ctprintf("Seed: %d (%s) | ↑↓: Adjust | R: Toggle", seed, seed_mode_text),
+			10, 55, 14, use_seed ? rl.YELLOW : rl.GRAY,
 		)
 
 		rl.EndDrawing()
