@@ -30,6 +30,12 @@ main :: proc() {
 	seed: u64 = 12345  // Default seed
 	use_seed := false  // If true, use manual seed instead of time-based
 
+	// Parameter tuning UI
+	// IMPORTANT: Create on heap and initialize in-place so pointers stay valid
+	param_panel := new(ParameterPanel)
+	defer free(param_panel)
+	initialize_parameter_panel(param_panel)
+
 	// Save counter for exported dungeons
 	save_count := 0
 
@@ -104,11 +110,51 @@ main :: proc() {
 			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
 		}
 
+		// P: Toggle parameter panel
+		if rl.IsKeyPressed(.P) {
+			param_panel.enabled = !param_panel.enabled
+		}
+
+		// Parameter panel: update and regenerate if changed
+		if param_panel.enabled {
+			params_changed := update_parameter_panel(param_panel)
+			if params_changed {
+				// Regenerate with new parameters
+				ca_cfg, bsp_cfg, _, hybrid_cfg := get_configs_from_panel(param_panel)
+
+				if use_seed {
+					rand.reset(seed)
+				}
+				free_dungeon(&dungeon)
+
+				// Regenerate with custom configs
+				switch algorithm {
+				case .Drunkards_Walk:
+					dungeon = make_dungeon()
+				case .BSP:
+					dungeon = make_dungeon_bsp(bsp_cfg)
+				case .Cellular_Automata:
+					dungeon = make_dungeon_ca(ca_cfg)
+				case .Hybrid:
+					dungeon = make_dungeon_hybrid(hybrid_cfg)
+				case .Prefab:
+					// Prefab count is controlled via panel
+					prefab_cfg := PREFAB_DEFAULT_CONFIG
+					prefab_cfg.prefab_count = param_panel.prefab_count
+					dungeon = make_dungeon_prefab(prefab_cfg)
+				}
+
+				spawn = place_spawn_points(&dungeon)
+				val_result = validate_connectivity(&dungeon, MAP_WIDTH / 2, MAP_HEIGHT / 2, false)
+			}
+		}
+
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
 		draw_dungeon(&dungeon)
 		draw_spawn_points(spawn)
 		draw_dungeon_stats(&dungeon, spawn, val_result)
+		draw_parameter_panel(param_panel)
 
 		// Draw mode label
 		mode_text: cstring
@@ -126,7 +172,7 @@ main :: proc() {
 		}
 
 		rl.DrawText(
-			fmt.ctprintf("%s - Space: Regen | 1-5: Algos | S: Save", mode_text),
+			fmt.ctprintf("%s - Space: Regen | 1-5: Algos | S: Save | P: Parameters", mode_text),
 			10, 10, 20, rl.WHITE,
 		)
 
