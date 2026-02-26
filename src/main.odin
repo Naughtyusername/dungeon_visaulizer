@@ -13,6 +13,7 @@ Algorithm :: enum {
 }
 
 main :: proc() {
+	rl.SetConfigFlags({.WINDOW_RESIZABLE})
 	rl.InitWindow(SCREEN_W, SCREEN_H, "Dungeon Visualizer")
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
@@ -38,6 +39,29 @@ main :: proc() {
 	defer free(param_panel)
 	initialize_parameter_panel(param_panel)
 
+	// Fullscreen and comparison mode toggles
+	fullscreen := false
+	comparison_mode := false
+
+	// Cached dungeons for comparison mode (only regenerate when needed, not every frame!)
+	comparison_dungeons := make([dynamic]Dungeon_Map, 4)
+	comparison_spawns := make([dynamic]SpawnPoints, 4)
+	comparison_markers := make([dynamic]EntityMarkers, 4)
+	defer {
+		for i in 0..<len(comparison_dungeons) {
+			free_dungeon(&comparison_dungeons[i])
+		}
+		delete(comparison_dungeons)
+		for i in 0..<len(comparison_markers) {
+			free_entity_markers(&comparison_markers[i])
+		}
+		delete(comparison_markers)
+		delete(comparison_spawns)
+	}
+
+	// Flag to regenerate comparison dungeons only when needed
+	regenerate_comparison := true
+
 	// Save counter for exported dungeons
 	save_count := 0
 
@@ -58,6 +82,7 @@ main :: proc() {
 
 		if rl.IsKeyPressed(.SPACE) {
 			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			regenerate_comparison = true
 		}
 		if rl.IsKeyPressed(.ONE) {
 			algorithm = .Drunkards_Walk
@@ -98,6 +123,7 @@ main :: proc() {
 			use_seed = true
 			// Regenerate with new seed
 			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			regenerate_comparison = true
 		}
 		if rl.IsKeyPressed(.DOWN) {
 			if seed > 0 {
@@ -106,12 +132,26 @@ main :: proc() {
 			use_seed = true
 			// Regenerate with new seed
 			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			regenerate_comparison = true
 		}
 
 		// R: Toggle random vs fixed seed mode
 		if rl.IsKeyPressed(.R) {
 			use_seed = !use_seed
 			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			regenerate_comparison = true
+		}
+
+		// F: Toggle fullscreen
+		if rl.IsKeyPressed(.F) {
+			fullscreen = !fullscreen
+			rl.ToggleFullscreen()
+		}
+
+		// C: Toggle comparison mode
+		if rl.IsKeyPressed(.C) {
+			comparison_mode = !comparison_mode
+			regenerate_comparison = true  // Need to regenerate when entering comparison mode
 		}
 
 		// P: Toggle parameter panel
@@ -155,45 +195,153 @@ main :: proc() {
 			}
 		}
 
-		rl.BeginDrawing()
-		rl.ClearBackground(rl.BLACK)
-		draw_dungeon(&dungeon)
-		draw_spawn_points(spawn)
-		draw_entity_markers(entity_markers)
-		draw_dungeon_stats(&dungeon, spawn, val_result)
-		draw_parameter_panel(param_panel)
+		// Regenerate comparison mode dungeons only when needed (not every frame!)
+		if comparison_mode && regenerate_comparison {
+			regenerate_comparison = false
 
-		// Draw mode label
-		mode_text: cstring
-		switch algorithm {
-		case .Drunkards_Walk:
-			mode_text = "Drunkard's Walk"
-		case .BSP:
-			mode_text = "BSP"
-		case .Cellular_Automata:
-			mode_text = "Cellular Automata"
-		case .Hybrid:
-			mode_text = "Hybrid (CA+BSP+Corridors)"
-		case .Prefab:
-			mode_text = "Prefab Rooms"
+			// Free old dungeons
+			for i in 0..<len(comparison_dungeons) {
+				free_dungeon(&comparison_dungeons[i])
+			}
+			for i in 0..<len(comparison_markers) {
+				free_entity_markers(&comparison_markers[i])
+			}
+			clear(&comparison_dungeons)
+			clear(&comparison_spawns)
+			clear(&comparison_markers)
+
+			// Generate new dungeons for all 4 algorithms with current seed
+			comparison_algos := []Algorithm{.Drunkards_Walk, .BSP, .Cellular_Automata, .Hybrid}
+			for algo in comparison_algos {
+				if use_seed {
+					rand.reset(seed)
+				}
+				d := make_dungeon_by_algorithm(algo)
+				s := place_spawn_points(&d)
+				m := place_entity_markers(&d, s, ENTITY_DEFAULT_CONFIG)
+
+				append(&comparison_dungeons, d)
+				append(&comparison_spawns, s)
+				append(&comparison_markers, m)
+			}
 		}
 
-		rl.DrawText(
-			fmt.ctprintf("%s - Space: Regen | 1-5: Algos | S: Save | P: Parameters", mode_text),
-			10, 10, 20, rl.WHITE,
-		)
+		rl.BeginDrawing()
+		rl.ClearBackground(rl.BLACK)
+
+		// Set up scaling camera for fullscreen
+		// Calculate scale to fill window while maintaining aspect ratio
+		if !comparison_mode {
+			window_w := f32(rl.GetScreenWidth())
+			window_h := f32(rl.GetScreenHeight())
+			scale := min(window_w / f32(SCREEN_W), window_h / f32(SCREEN_H))
+
+			camera := rl.Camera2D{
+				offset = {window_w / 2, window_h / 2},
+				target = {f32(SCREEN_W) / 2, f32(SCREEN_H) / 2},
+				rotation = 0,
+				zoom = scale,
+			}
+			rl.BeginMode2D(camera)
+			draw_single_view(&dungeon, spawn, entity_markers, val_result, algorithm)
+			rl.EndMode2D()
+		} else {
+			draw_comparison_mode_cached(comparison_dungeons, comparison_spawns, comparison_markers)
+		}
+
+		// Draw parameter panel OUTSIDE camera so mouse hit detection is in screen space
+		draw_parameter_panel(param_panel)
+
+		// Shared UI elements
+		help_text := comparison_mode ? "C: Single View | F: Fullscreen | Space: Regen" : "Space: Regen | 1-5: Algos | S: Save | P: Parameters | C: Compare | F: Fullscreen"
+		rl.DrawText(fmt.ctprintf("%s", help_text), 10, 10, 14, rl.GRAY)
 
 		// Legend for spawn and entity markers
-		rl.DrawText("🟩 Start 🟥 End | 🟧 Enemy 🟨 Treasure | Connectivity auto-checked", 10, 35, 14, rl.GRAY)
+		rl.DrawText("🟩 Start 🟥 End | 🟧 Enemy 🟨 Treasure | Connectivity auto-checked", 10, 30, 14, rl.GRAY)
 
 		// Seed display
 		seed_mode_text := use_seed ? "FIXED" : "RANDOM"
 		rl.DrawText(
 			fmt.ctprintf("Seed: %d (%s) | ↑↓: Adjust | R: Toggle", seed, seed_mode_text),
-			10, 55, 14, use_seed ? rl.YELLOW : rl.GRAY,
+			10, 50, 14, use_seed ? rl.YELLOW : rl.GRAY,
 		)
 
+		if comparison_mode {
+			rl.DrawText("COMPARISON MODE (4 algorithms)", 10, 70, 16, rl.YELLOW)
+		}
+
 		rl.EndDrawing()
+	}
+}
+
+// draw_single_view renders the current dungeon in single-algorithm mode
+draw_single_view :: proc(dungeon: ^Dungeon_Map, spawn: SpawnPoints, entity_markers: EntityMarkers, val_result: ValidationResult, algorithm: Algorithm) {
+	draw_dungeon(dungeon)
+	draw_spawn_points(spawn)
+	draw_entity_markers(entity_markers)
+	draw_dungeon_stats(dungeon, spawn, val_result)
+
+	// Draw mode label
+	mode_text: cstring
+	switch algorithm {
+	case .Drunkards_Walk:
+		mode_text = "Drunkard's Walk"
+	case .BSP:
+		mode_text = "BSP"
+	case .Cellular_Automata:
+		mode_text = "Cellular Automata"
+	case .Hybrid:
+		mode_text = "Hybrid (CA+BSP+Corridors)"
+	case .Prefab:
+		mode_text = "Prefab Rooms"
+	}
+
+	rl.DrawText(fmt.ctprintf("%s", mode_text), 10, 70, 16, rl.WHITE)
+}
+
+// draw_comparison_mode_cached renders 4 pre-generated algorithms side-by-side in a 2x2 grid
+// Uses cached dungeons to avoid regenerating every frame
+// Each panel is 960×540 at fullscreen (1920×1080), showing full 80×45 map scaled to 12px tiles
+// Panels: [Top-Left: DW] [Top-Right: BSP] [Bottom-Left: CA] [Bottom-Right: Hybrid]
+draw_comparison_mode_cached :: proc(dungeons: [dynamic]Dungeon_Map, spawns: [dynamic]SpawnPoints, markers: [dynamic]EntityMarkers) {
+	PANEL_W :: 960
+	PANEL_H :: 540
+	TILE_SCALE :: 0.75  // 12px tiles (16 * 0.75 = 12) to fit full 80×45 in 960×540
+
+	positions := [][2]i32{{0, 0}, {PANEL_W, 0}, {0, PANEL_H}, {PANEL_W, PANEL_H}}
+	algo_names := []cstring{"DW", "BSP", "CA", "Hybrid"}
+
+	for idx in 0..<4 {
+		if idx >= len(dungeons) {
+			continue
+		}
+
+		offset := positions[idx]
+		offset_x := offset.x
+		offset_y := offset.y
+
+		// Set up 2D camera for this panel with zoom to fit full map
+		camera := rl.Camera2D{
+			offset = {f32(offset_x), f32(offset_y)},
+			target = {0, 0},
+			rotation = 0,
+			zoom = TILE_SCALE,
+		}
+
+		// Draw this panel with cached data (scaled to see full map)
+		rl.BeginMode2D(camera)
+		draw_dungeon(&dungeons[idx])
+		draw_spawn_points(spawns[idx])
+		draw_entity_markers(markers[idx])
+		rl.EndMode2D()
+
+		// Draw panel border and label
+		border_color := rl.Color{100, 100, 100, 255}
+		rl.DrawRectangleLines(offset_x, offset_y, i32(PANEL_W), i32(PANEL_H), border_color)
+
+		label_x := offset_x + 10
+		label_y := offset_y + i32(PANEL_H) - 25
+		rl.DrawText(algo_names[idx], label_x, label_y, 14, rl.WHITE)
 	}
 }
 
