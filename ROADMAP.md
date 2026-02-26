@@ -28,22 +28,29 @@
 - ✅ Enemy & Treasure Spawn Point markers (gameplay design aid)
 - ✅ Entity export in `.dun` files
 
-## High-Value Next (Milestone 3)
+## Completed (Milestone 3)
 
 ### User Interface
-- **Parameter Tuning UI** ⚡ RECOMMENDED
+- ✅ **Parameter Tuning UI**
   - Live sliders for generation tweaking
   - CA iterations (1-8), BSP room size (5-20), corridor width (1-3), prefab count (1-10)
   - Real-time regeneration as you adjust
-  - **Impact:** Makes exploration and optimization much faster
-  - **Effort:** 1-2 hours
+  - Slider hit detection fixed for reliable dragging
 
-- **Algorithm Comparison Mode**
+- ✅ **Algorithm Comparison Mode (C key)**
   - Side-by-side 4-panel view: same seed, all algorithms
-  - Educational + helps pick best algo per game region
-  - **Impact:** Visual understanding of algorithm differences
-  - **Effort:** 2 hours
+  - Shows complete 80×45 maps (12px tiles) in 960×540 panels
+  - Cached regeneration for stable performance
+  - Educational tool for algorithm comparison
 
+- ✅ **Fullscreen Toggle (F key)**
+  - Independent of comparison mode
+  - Scales dungeon to fill screen
+  - Works at any resolution
+
+## High-Value Next (Milestone 4)
+
+### User Interface
 - **Interactive Prefab Editor**
   - Visual room designer within the visualizer
   - Paint tiles, save as prefab template

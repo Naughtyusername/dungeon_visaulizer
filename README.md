@@ -21,6 +21,9 @@ Built in Odin with Raylib visualization.
 - Reproducible seeds (same layout every time)
 - JSON export (use in your game)
 - Dungeon statistics (coverage, room count, reachability)
+- Fullscreen support (F key)
+- Algorithm comparison mode (C key) — side-by-side 4-panel view of all algorithms
+- Live parameter tuning (P key) — adjust generation settings in real-time
 
 ## Build and Run
 
@@ -70,14 +73,16 @@ build.bat
 
 ## Controls
 
-| Key       | Action                              |
-|-----------|-------------------------------------|
+| Key       | Action                                          |
+|-----------|------------------------------------------------|
+| **Space** | Regenerate dungeon with current settings       |
 | **1-5**   | Switch algorithms (DW, BSP, CA, Hybrid, Prefab) |
-| **Space** | Regenerate current algorithm        |
-| **↑/↓**   | Adjust seed (enables fixed mode)    |
-| **R**     | Toggle RANDOM/FIXED seed mode       |
-| **P**     | Toggle parameter tuning panel       |
-| **S**     | Save current dungeon to `.dun` file |
+| **C**     | Toggle comparison mode (4-panel view)          |
+| **F**     | Toggle fullscreen                              |
+| **↑/↓**   | Adjust seed (enables fixed seed mode)           |
+| **R**     | Toggle RANDOM/FIXED seed mode                  |
+| **P**     | Toggle parameter tuning panel                  |
+| **S**     | Save current dungeon to `.dun` file            |
 | **Escape** | Quit                                |
 
 **On-Screen Display:**

@@ -39,11 +39,18 @@ main :: proc() {
 	defer free(param_panel)
 	initialize_parameter_panel(param_panel)
 
-	// Fullscreen and comparison mode toggles
+	// =============================================================================
+	// FULLSCREEN & COMPARISON MODE
+	// =============================================================================
+	// Fullscreen toggle: F key, independent of comparison mode
+	// Comparison mode: C key, shows 4 algorithms (DW, BSP, CA, Hybrid) side-by-side
+	// Cached dungeons strategy: Generate once per seed change, not every frame (60 FPS)
+	// to avoid "seed cycling" bug where RNG resets continuously
 	fullscreen := false
 	comparison_mode := false
 
 	// Cached dungeons for comparison mode (only regenerate when needed, not every frame!)
+	// Pre-generated to avoid expensive regeneration in draw loop
 	comparison_dungeons := make([dynamic]Dungeon_Map, 4)
 	comparison_spawns := make([dynamic]SpawnPoints, 4)
 	comparison_markers := make([dynamic]EntityMarkers, 4)
@@ -275,6 +282,15 @@ main :: proc() {
 }
 
 // draw_single_view renders the current dungeon in single-algorithm mode
+// Called at default zoom (no camera scaling in this proc)
+// Camera scaling is applied in main loop for fullscreen support
+//
+// Parameters:
+//   dungeon: Current generated dungeon
+//   spawn: Spawn point locations (start/end)
+//   entity_markers: Enemy and treasure marker locations
+//   val_result: Connectivity validation result
+//   algorithm: Current algorithm being displayed
 draw_single_view :: proc(dungeon: ^Dungeon_Map, spawn: SpawnPoints, entity_markers: EntityMarkers, val_result: ValidationResult, algorithm: Algorithm) {
 	draw_dungeon(dungeon)
 	draw_spawn_points(spawn)
@@ -300,9 +316,19 @@ draw_single_view :: proc(dungeon: ^Dungeon_Map, spawn: SpawnPoints, entity_marke
 }
 
 // draw_comparison_mode_cached renders 4 pre-generated algorithms side-by-side in a 2x2 grid
-// Uses cached dungeons to avoid regenerating every frame
-// Each panel is 960×540 at fullscreen (1920×1080), showing full 80×45 map scaled to 12px tiles
-// Panels: [Top-Left: DW] [Top-Right: BSP] [Bottom-Left: CA] [Bottom-Right: Hybrid]
+// Uses cached dungeons to avoid regenerating every frame (critical for performance)
+//
+// Layout:
+//   960×540 per panel at 1920×1080 fullscreen
+//   Shows complete 80×45 map per panel (scaled to 12px tiles via camera zoom 0.75)
+//   Panels: [Top-Left: DW] [Top-Right: BSP] [Bottom-Left: CA] [Bottom-Right: Hybrid]
+//
+// Parameters:
+//   dungeons: Pre-generated 4 dungeons (DW, BSP, CA, Hybrid) from comparison cache
+//   spawns: Spawn points for each cached dungeon
+//   markers: Entity markers (enemies/treasure) for each cached dungeon
+//
+// Note: Uses Raylib 2D camera for clean viewport offsets per panel (no manual coordinate adjustments needed)
 draw_comparison_mode_cached :: proc(dungeons: [dynamic]Dungeon_Map, spawns: [dynamic]SpawnPoints, markers: [dynamic]EntityMarkers) {
 	PANEL_W :: 960
 	PANEL_H :: 540
