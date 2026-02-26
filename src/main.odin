@@ -24,6 +24,8 @@ main :: proc() {
 	// Gameplay helpers
 	spawn := place_spawn_points(&dungeon)
 	val_result := validate_connectivity(&dungeon, MAP_WIDTH / 2, MAP_HEIGHT / 2, false)
+	entity_markers := place_entity_markers(&dungeon, spawn, ENTITY_DEFAULT_CONFIG)
+	defer free_entity_markers(&entity_markers)
 
 	// Seed system: manual seed control for reproducible dungeons
 	// User can adjust with arrow keys
@@ -41,7 +43,7 @@ main :: proc() {
 
 	for !rl.WindowShouldClose() {
 		// Helper: regenerate and update gameplay data
-		do_regenerate :: proc(algo: Algorithm, d: ^Dungeon_Map, s: ^SpawnPoints, v: ^ValidationResult, seed_val: u64, use_seed: bool) {
+		do_regenerate :: proc(algo: Algorithm, d: ^Dungeon_Map, s: ^SpawnPoints, v: ^ValidationResult, e: ^EntityMarkers, seed_val: u64, use_seed: bool) {
 			// Seed RNG if using manual seed
 			if use_seed {
 				rand.reset(seed_val)
@@ -50,37 +52,39 @@ main :: proc() {
 			d^ = make_dungeon_by_algorithm(algo)
 			s^ = place_spawn_points(d)
 			v^ = validate_connectivity(d, MAP_WIDTH / 2, MAP_HEIGHT / 2, false)
+			free_entity_markers(e)
+			e^ = place_entity_markers(d, s^, ENTITY_DEFAULT_CONFIG)
 		}
 
 		if rl.IsKeyPressed(.SPACE) {
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.ONE) {
 			algorithm = .Drunkards_Walk
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.TWO) {
 			algorithm = .BSP
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.THREE) {
 			algorithm = .Cellular_Automata
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.FOUR) {
 			algorithm = .Hybrid
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.FIVE) {
 			algorithm = .Prefab
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
 		}
 
 		// Export current dungeon to file (S key)
 		if rl.IsKeyPressed(.S) {
 			save_count += 1
 			filename := fmt.ctprintf("dungeon_%02d.dun", save_count)
-			success := export_dungeon(&dungeon, filename)
+			success := export_dungeon(&dungeon, filename, entity_markers)
 			if success {
 				fmt.println("Saved:", filename)
 			} else {
@@ -93,7 +97,7 @@ main :: proc() {
 			seed += 1
 			use_seed = true
 			// Regenerate with new seed
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.DOWN) {
 			if seed > 0 {
@@ -101,13 +105,13 @@ main :: proc() {
 			}
 			use_seed = true
 			// Regenerate with new seed
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
 		}
 
 		// R: Toggle random vs fixed seed mode
 		if rl.IsKeyPressed(.R) {
 			use_seed = !use_seed
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
 		}
 
 		// P: Toggle parameter panel
@@ -146,6 +150,8 @@ main :: proc() {
 
 				spawn = place_spawn_points(&dungeon)
 				val_result = validate_connectivity(&dungeon, MAP_WIDTH / 2, MAP_HEIGHT / 2, false)
+				free_entity_markers(&entity_markers)
+				entity_markers = place_entity_markers(&dungeon, spawn, {})
 			}
 		}
 
@@ -153,6 +159,7 @@ main :: proc() {
 		rl.ClearBackground(rl.BLACK)
 		draw_dungeon(&dungeon)
 		draw_spawn_points(spawn)
+		draw_entity_markers(entity_markers)
 		draw_dungeon_stats(&dungeon, spawn, val_result)
 		draw_parameter_panel(param_panel)
 
@@ -176,8 +183,8 @@ main :: proc() {
 			10, 10, 20, rl.WHITE,
 		)
 
-		// Legend for spawn points
-		rl.DrawText("🟩 Start 🟥 End | Connectivity auto-checked", 10, 35, 14, rl.GRAY)
+		// Legend for spawn and entity markers
+		rl.DrawText("🟩 Start 🟥 End | 🟧 Enemy 🟨 Treasure | Connectivity auto-checked", 10, 35, 14, rl.GRAY)
 
 		// Seed display
 		seed_mode_text := use_seed ? "FIXED" : "RANDOM"

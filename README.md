@@ -17,6 +17,7 @@ Built in Odin with Raylib visualization.
 **Game-ready features:**
 - Connectivity validation (ensures playability)
 - Spawn point placement (start/goal)
+- Enemy & treasure spawn markers (gameplay design)
 - Reproducible seeds (same layout every time)
 - JSON export (use in your game)
 - Dungeon statistics (coverage, room count, reachability)
@@ -75,6 +76,7 @@ build.bat
 | **Space** | Regenerate current algorithm        |
 | **↑/↓**   | Adjust seed (enables fixed mode)    |
 | **R**     | Toggle RANDOM/FIXED seed mode       |
+| **P**     | Toggle parameter tuning panel       |
 | **S**     | Save current dungeon to `.dun` file |
 | **Escape** | Quit                                |
 
@@ -108,7 +110,7 @@ build.bat
    - Best for: underground bases, mixed indoor/outdoor
 
 5. **Prefab Rooms** — Hand-designed room templates scattered procedurally
-   - 6 built-in templates: Boss Room, Treasure Vault, Guard Chamber, Throne Room, Library, Armory
+   - 7 built-in templates: Boss Room, Treasure Vault, Guard Chamber, Throne Room, Library, Armory, Sleeping Quarters
    - Connectivity validated, corridors auto-carved
    - Best for: showcasing designed spaces, room libraries
 

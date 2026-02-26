@@ -24,6 +24,10 @@
 - ✅ Comprehensive code documentation
 - ✅ Modular architecture (separate .odin files per feature)
 
+### Game Integration
+- ✅ Enemy & Treasure Spawn Point markers (gameplay design aid)
+- ✅ Entity export in `.dun` files
+
 ## High-Value Next (Milestone 3)
 
 ### User Interface
@@ -48,13 +52,6 @@
   - **Effort:** 2-3 hours
 
 ### Game Integration
-- **Enemy/Treasure Spawn Points**
-  - Mark enemy encounter zones
-  - Treasure chest placement hints
-  - Visualization as icons on dungeon
-  - **Impact:** Gameplay design aid
-  - **Effort:** 1 hour
-
 - **Room Type System**
   - Tag rooms as boss, treasure, safe zone, etc.
   - Export room metadata with dungeon
@@ -77,7 +74,7 @@
 - Export dungeons with `S` key → `.dun` files
 - Parse tiles and rooms in your game engine
 - Use spawn points for player placement
-- See [USAGE.md](USAGE.md) (coming soon) for parser examples
+- Dungeons are saved in simple JSON-like format (tiles as string, rooms as array)
 
 **To extend this tool:**
 - All code is modular: pick what you need from `src/`

@@ -17,7 +17,6 @@ ValidationResult :: struct {
 	is_valid: bool,           // True if all floors are connected
 	total_floor_tiles: int,   // Total floor tiles in dungeon
 	reachable_tiles: int,     // Floor tiles reachable from start
-	isolated_regions: int,    // Number of disconnected floor regions
 	largest_region_size: int, // Biggest connected region
 }
 

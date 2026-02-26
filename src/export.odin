@@ -28,15 +28,21 @@ import "core:strings"
 //     "rooms": [
 //       {"x": 10, "y": 15, "w": 8, "h": 6},
 //       ...
+//     ],
+//     "entities": [
+//       {"x": 12, "y": 8, "type": "enemy"},
+//       {"x": 45, "y": 20, "type": "treasure"},
+//       ...
 //     ]
 //   }
 //
 // Parameters:
 //   dungeon: Dungeon to save
 //   filename: Output file path (e.g., "dungeon.dun" or "exports/level_01.dun")
+//   entity_markers: Entity markers to save (optional)
 //
 // Returns: true if export succeeded, false on error
-export_dungeon :: proc(dungeon: ^Dungeon_Map, filename: cstring) -> bool {
+export_dungeon :: proc(dungeon: ^Dungeon_Map, filename: cstring, entity_markers := EntityMarkers{}) -> bool {
 	// Build file content
 	sb := strings.builder_make()
 	defer strings.builder_destroy(&sb)
@@ -67,6 +73,20 @@ export_dungeon :: proc(dungeon: ^Dungeon_Map, filename: cstring) -> bool {
 		fmt.sbprintf(&sb, "    {{\"x\": %d, \"y\": %d, \"w\": %d, \"h\": %d}}",
 			room.x, room.y, room.w, room.h)
 		if i < len(dungeon.rooms) - 1 {
+			fmt.sbprint(&sb, ",")
+		}
+		fmt.sbprint(&sb, "\n")
+	}
+	fmt.sbprint(&sb, "  ],\n")
+
+	// Entity list (enemies and treasures)
+	fmt.sbprint(&sb, "  \"entities\": [\n")
+	for i in 0..<len(entity_markers.markers) {
+		marker := entity_markers.markers[i]
+		type_str := marker.kind == .Enemy ? "enemy" : "treasure"
+		fmt.sbprintf(&sb, "    {{\"x\": %d, \"y\": %d, \"type\": \"%s\"}}",
+			marker.x, marker.y, type_str)
+		if i < len(entity_markers.markers) - 1 {
 			fmt.sbprint(&sb, ",")
 		}
 		fmt.sbprint(&sb, "\n")
@@ -215,6 +235,62 @@ extract_string_field :: proc(content: string, field_name: cstring) -> string {
 	return content[start:end]
 }
 
+// Helper: Extract entity markers list from JSON-like string
+// Parses: "entities": [{"x": ..., "y": ..., "type": "..."}, ...]
+extract_entities :: proc(content: string, markers: ^[dynamic]EntityMarker) {
+	entities_start := strings.index(content, "\"entities\":")
+	if entities_start < 0 {
+		return
+	}
+
+	// Find opening bracket
+	bracket_start := strings.index(content[entities_start:], "[")
+	if bracket_start < 0 {
+		return
+	}
+	bracket_start += entities_start
+
+	// Find closing bracket
+	bracket_end := strings.index(content[bracket_start:], "]")
+	if bracket_end < 0 {
+		return
+	}
+	bracket_end += bracket_start
+
+	entities_str := content[bracket_start + 1:bracket_end]
+
+	// Parse each entity object {...}
+	pos := 0
+	for pos < len(entities_str) {
+		// Find next entity object
+		obj_start := strings.index(entities_str[pos:], "{")
+		if obj_start < 0 {
+			break
+		}
+		obj_start += pos
+
+		obj_end := strings.index(entities_str[obj_start:], "}")
+		if obj_end < 0 {
+			break
+		}
+		obj_end += obj_start
+
+		obj_str := entities_str[obj_start:obj_end + 1]
+
+		// Parse x, y, type from object
+		entity_x := extract_object_int(obj_str, "x")
+		entity_y := extract_object_int(obj_str, "y")
+		type_str := extract_quoted_field(obj_str, "type")
+
+		if entity_x >= 0 && entity_y >= 0 {
+			kind := type_str == "treasure" ? EntityType.Treasure : EntityType.Enemy
+			append(markers, EntityMarker{x = entity_x, y = entity_y, kind = kind})
+		}
+
+		pos = obj_end + 1
+	}
+}
+
 // Helper: Extract room list from JSON-like string
 // Parses: "rooms": [{...}, {...}, ...]
 extract_rooms :: proc(content: string, rooms: ^[dynamic]Room) {
@@ -269,6 +345,36 @@ extract_rooms :: proc(content: string, rooms: ^[dynamic]Room) {
 
 		pos = obj_end + 1
 	}
+}
+
+// Helper: Extract quoted string field from object
+// Looks for: "fieldname": "VALUE"
+extract_quoted_field :: proc(obj_str: string, field_name: cstring) -> string {
+	target := fmt.tprintf("\"%s\":", field_name)
+
+	pos := strings.index(obj_str, target)
+	if pos < 0 {
+		return ""
+	}
+
+	// Skip to opening quote
+	start := pos + len(target)
+	for start < len(obj_str) && obj_str[start] != '"' {
+		start += 1
+	}
+	start += 1  // Skip opening quote
+
+	// Find closing quote
+	end := start
+	for end < len(obj_str) && obj_str[end] != '"' {
+		end += 1
+	}
+
+	if start >= end {
+		return ""
+	}
+
+	return obj_str[start:end]
 }
 
 // Helper: Extract integer from object field (not quoted)

@@ -29,7 +29,6 @@ Slider :: struct {
 	label: cstring,
 	value: ^int,           // Pointer to value to modify
 	min, max: int,         // Range
-	is_float: bool,        // If true, treat value as f32 (value / 100)
 	x, y: i32,             // Position on screen
 	width: i32,            // Width in pixels
 	dragging: bool,        // Currently being dragged
