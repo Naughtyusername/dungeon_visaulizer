@@ -25,6 +25,8 @@ main :: proc() {
 	// Gameplay helpers
 	spawn := place_spawn_points(&dungeon)
 	val_result := validate_connectivity(&dungeon, MAP_WIDTH / 2, MAP_HEIGHT / 2, false)
+	room_tags := tag_rooms(&dungeon)
+	defer free_room_tags(&room_tags)
 	entity_markers := place_entity_markers(&dungeon, spawn, ENTITY_DEFAULT_CONFIG)
 	defer free_entity_markers(&entity_markers)
 
@@ -54,6 +56,7 @@ main :: proc() {
 	comparison_dungeons := make([dynamic]Dungeon_Map, 4)
 	comparison_spawns := make([dynamic]SpawnPoints, 4)
 	comparison_markers := make([dynamic]EntityMarkers, 4)
+	comparison_tags := make([dynamic]Room_Tags, 4)
 	defer {
 		for i in 0..<len(comparison_dungeons) {
 			free_dungeon(&comparison_dungeons[i])
@@ -64,6 +67,10 @@ main :: proc() {
 		}
 		delete(comparison_markers)
 		delete(comparison_spawns)
+		for i in 0..<len(comparison_tags) {
+			free_room_tags(&comparison_tags[i])
+		}
+		delete(comparison_tags)
 	}
 
 	// Flag to regenerate comparison dungeons only when needed
@@ -74,13 +81,17 @@ main :: proc() {
 
 	for !rl.WindowShouldClose() {
 		// Helper: regenerate and update gameplay data
-		do_regenerate :: proc(algo: Algorithm, d: ^Dungeon_Map, s: ^SpawnPoints, v: ^ValidationResult, e: ^EntityMarkers, seed_val: u64, use_seed: bool) {
+		do_regenerate :: proc(algo: Algorithm, d: ^Dungeon_Map, s: ^SpawnPoints, v: ^ValidationResult, t: ^Room_Tags, e: ^EntityMarkers, seed_val: u64, use_seed: bool) {
 			// Seed RNG if using manual seed
 			if use_seed {
 				rand.reset(seed_val)
 			}
 			free_dungeon(d)
 			d^ = make_dungeon_by_algorithm(algo)
+			// Tag rooms before spawn points — tagging is pure geometry,
+			// spawn placement does not depend on room types
+			free_room_tags(t)
+			t^ = tag_rooms(d)
 			s^ = place_spawn_points(d)
 			v^ = validate_connectivity(d, MAP_WIDTH / 2, MAP_HEIGHT / 2, false)
 			free_entity_markers(e)
@@ -88,28 +99,28 @@ main :: proc() {
 		}
 
 		if rl.IsKeyPressed(.SPACE) {
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
 			regenerate_comparison = true
 		}
 		if rl.IsKeyPressed(.ONE) {
 			algorithm = .Drunkards_Walk
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.TWO) {
 			algorithm = .BSP
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.THREE) {
 			algorithm = .Cellular_Automata
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.FOUR) {
 			algorithm = .Hybrid
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
 		}
 		if rl.IsKeyPressed(.FIVE) {
 			algorithm = .Prefab
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
 		}
 
 		// Export current dungeon to file (S key)
@@ -129,7 +140,7 @@ main :: proc() {
 			seed += 1
 			use_seed = true
 			// Regenerate with new seed
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
 			regenerate_comparison = true
 		}
 		if rl.IsKeyPressed(.DOWN) {
@@ -138,14 +149,14 @@ main :: proc() {
 			}
 			use_seed = true
 			// Regenerate with new seed
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
 			regenerate_comparison = true
 		}
 
 		// R: Toggle random vs fixed seed mode
 		if rl.IsKeyPressed(.R) {
 			use_seed = !use_seed
-			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &entity_markers, seed, use_seed)
+			do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
 			regenerate_comparison = true
 		}
 
@@ -195,6 +206,8 @@ main :: proc() {
 					dungeon = make_dungeon_prefab(prefab_cfg)
 				}
 
+				free_room_tags(&room_tags)
+				room_tags = tag_rooms(&dungeon)
 				spawn = place_spawn_points(&dungeon)
 				val_result = validate_connectivity(&dungeon, MAP_WIDTH / 2, MAP_HEIGHT / 2, false)
 				free_entity_markers(&entity_markers)
@@ -213,9 +226,13 @@ main :: proc() {
 			for i in 0..<len(comparison_markers) {
 				free_entity_markers(&comparison_markers[i])
 			}
+			for i in 0..<len(comparison_tags) {
+				free_room_tags(&comparison_tags[i])
+			}
 			clear(&comparison_dungeons)
 			clear(&comparison_spawns)
 			clear(&comparison_markers)
+			clear(&comparison_tags)
 
 			// Generate new dungeons for all 4 algorithms with current seed
 			comparison_algos := []Algorithm{.Drunkards_Walk, .BSP, .Cellular_Automata, .Hybrid}
@@ -224,11 +241,13 @@ main :: proc() {
 					rand.reset(seed)
 				}
 				d := make_dungeon_by_algorithm(algo)
+				t := tag_rooms(&d)
 				s := place_spawn_points(&d)
 				m := place_entity_markers(&d, s, ENTITY_DEFAULT_CONFIG)
 
 				append(&comparison_dungeons, d)
 				append(&comparison_spawns, s)
+				append(&comparison_tags, t)
 				append(&comparison_markers, m)
 			}
 		}
@@ -250,10 +269,10 @@ main :: proc() {
 				zoom = scale,
 			}
 			rl.BeginMode2D(camera)
-			draw_single_view(&dungeon, spawn, entity_markers, val_result, algorithm)
+			draw_single_view(&dungeon, spawn, room_tags, entity_markers, val_result, algorithm)
 			rl.EndMode2D()
 		} else {
-			draw_comparison_mode_cached(comparison_dungeons, comparison_spawns, comparison_markers)
+			draw_comparison_mode_cached(comparison_dungeons, comparison_spawns, comparison_tags, comparison_markers)
 		}
 
 		// Draw parameter panel OUTSIDE camera so mouse hit detection is in screen space
@@ -263,8 +282,8 @@ main :: proc() {
 		help_text := comparison_mode ? "C: Single View | F: Fullscreen | Space: Regen" : "Space: Regen | 1-5: Algos | S: Save | P: Parameters | C: Compare | F: Fullscreen"
 		rl.DrawText(fmt.ctprintf("%s", help_text), 10, 10, 14, rl.GRAY)
 
-		// Legend for spawn and entity markers
-		rl.DrawText("🟩 Start 🟥 End | 🟧 Enemy 🟨 Treasure | Connectivity auto-checked", 10, 30, 14, rl.GRAY)
+		// Legend for spawn, entity, and room type markers
+		rl.DrawText("🟩 Start 🟥 End | 🟧 Enemy 🟨 Treasure | [B]oss [T]reasure [S]afe rooms (BSP) | Connectivity auto-checked", 10, 30, 14, rl.GRAY)
 
 		// Seed display
 		seed_mode_text := use_seed ? "FIXED" : "RANDOM"
@@ -291,8 +310,9 @@ main :: proc() {
 //   entity_markers: Enemy and treasure marker locations
 //   val_result: Connectivity validation result
 //   algorithm: Current algorithm being displayed
-draw_single_view :: proc(dungeon: ^Dungeon_Map, spawn: SpawnPoints, entity_markers: EntityMarkers, val_result: ValidationResult, algorithm: Algorithm) {
+draw_single_view :: proc(dungeon: ^Dungeon_Map, spawn: SpawnPoints, tags: Room_Tags, entity_markers: EntityMarkers, val_result: ValidationResult, algorithm: Algorithm) {
 	draw_dungeon(dungeon)
+	draw_room_tags(dungeon, tags)
 	draw_spawn_points(spawn)
 	draw_entity_markers(entity_markers)
 	draw_dungeon_stats(dungeon, spawn, val_result)
@@ -329,7 +349,7 @@ draw_single_view :: proc(dungeon: ^Dungeon_Map, spawn: SpawnPoints, entity_marke
 //   markers: Entity markers (enemies/treasure) for each cached dungeon
 //
 // Note: Uses Raylib 2D camera for clean viewport offsets per panel (no manual coordinate adjustments needed)
-draw_comparison_mode_cached :: proc(dungeons: [dynamic]Dungeon_Map, spawns: [dynamic]SpawnPoints, markers: [dynamic]EntityMarkers) {
+draw_comparison_mode_cached :: proc(dungeons: [dynamic]Dungeon_Map, spawns: [dynamic]SpawnPoints, tags: [dynamic]Room_Tags, markers: [dynamic]EntityMarkers) {
 	PANEL_W :: 960
 	PANEL_H :: 540
 	TILE_SCALE :: 0.75  // 12px tiles (16 * 0.75 = 12) to fit full 80×45 in 960×540
@@ -357,6 +377,9 @@ draw_comparison_mode_cached :: proc(dungeons: [dynamic]Dungeon_Map, spawns: [dyn
 		// Draw this panel with cached data (scaled to see full map)
 		rl.BeginMode2D(camera)
 		draw_dungeon(&dungeons[idx])
+		if idx < len(tags) {
+			draw_room_tags(&dungeons[idx], tags[idx])
+		}
 		draw_spawn_points(spawns[idx])
 		draw_entity_markers(markers[idx])
 		rl.EndMode2D()

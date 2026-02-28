@@ -28,10 +28,22 @@ FLOOR_TARGET :: int(f32(MAP_WIDTH * MAP_HEIGHT) * 0.35)
 // Do NOT reorder enum — breaks assumptions throughout generators
 Tile_Type :: enum { Wall, Floor }
 
+// Room_Type gives semantic meaning to BSP rooms for game design purposes.
+// Critical: Normal MUST be the zero value (first entry) so all Room{} literals
+// default to .Normal without explicit initialization — same invariant as Tile_Type.Wall.
+// Do NOT reorder.
+Room_Type :: enum {
+	Normal,   // Zero value — untagged default
+	Boss,     // One per dungeon, the largest room
+	Treasure, // Mid-sized rooms, configurable count
+	Safe,     // Randomly selected from remaining rooms
+}
+
 // Room represents a rectangular area (e.g., BSP leaf nodes, prefab placements)
 // x, y = top-left corner
 // w, h = width and height in tiles
-Room :: struct { x, y, w, h: int }
+// kind: semantic type assigned by tag_rooms() — defaults to .Normal
+Room :: struct { x, y, w, h: int, kind: Room_Type }
 
 // Dungeon_Map is the main state container for a complete dungeon
 // tiles:        2D grid of Tile_Type (height × width) — row-major order

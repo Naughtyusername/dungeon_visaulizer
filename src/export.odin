@@ -70,8 +70,8 @@ export_dungeon :: proc(dungeon: ^Dungeon_Map, filename: cstring, entity_markers 
 	fmt.sbprint(&sb, "  \"rooms\": [\n")
 	for i in 0..<len(dungeon.rooms) {
 		room := dungeon.rooms[i]
-		fmt.sbprintf(&sb, "    {{\"x\": %d, \"y\": %d, \"w\": %d, \"h\": %d}}",
-			room.x, room.y, room.w, room.h)
+		fmt.sbprintf(&sb, "    {{\"x\": %d, \"y\": %d, \"w\": %d, \"h\": %d, \"type\": \"%s\"}}",
+			room.x, room.y, room.w, room.h, room_type_to_string(room.kind))
 		if i < len(dungeon.rooms) - 1 {
 			fmt.sbprint(&sb, ",")
 		}
@@ -165,6 +165,17 @@ import_dungeon :: proc(filename: cstring) -> Dungeon_Map {
 	extract_rooms(content, &dungeon.rooms)
 
 	return dungeon
+}
+
+// room_type_to_string converts a Room_Type enum value to its JSON string representation
+room_type_to_string :: proc(kind: Room_Type) -> string {
+	switch kind {
+	case .Boss:     return "boss"
+	case .Treasure: return "treasure"
+	case .Safe:     return "safe"
+	case .Normal:   return "normal"
+	}
+	return "normal"
 }
 
 // Helper: Extract integer field from JSON-like string
@@ -333,14 +344,25 @@ extract_rooms :: proc(content: string, rooms: ^[dynamic]Room) {
 
 		obj_str := rooms_str[obj_start:obj_end + 1]
 
-		// Parse x, y, w, h from object
+		// Parse x, y, w, h, type from object
 		room_x := extract_object_int(obj_str, "x")
 		room_y := extract_object_int(obj_str, "y")
 		room_w := extract_object_int(obj_str, "w")
 		room_h := extract_object_int(obj_str, "h")
 
+		// Parse optional "type" field — defaults to .Normal for backward compat
+		// with old .dun files that have no type field
+		type_str := extract_quoted_field(obj_str, "type")
+		room_kind: Room_Type
+		switch type_str {
+		case "boss":     room_kind = .Boss
+		case "treasure": room_kind = .Treasure
+		case "safe":     room_kind = .Safe
+		case:            room_kind = .Normal
+		}
+
 		if room_x >= 0 && room_y >= 0 && room_w > 0 && room_h > 0 {
-			append(rooms, Room{x = room_x, y = room_y, w = room_w, h = room_h})
+			append(rooms, Room{x = room_x, y = room_y, w = room_w, h = room_h, kind = room_kind})
 		}
 
 		pos = obj_end + 1
