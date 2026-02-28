@@ -1,6 +1,9 @@
 package dungeon_visualizer
 
 import "core:math/rand"
+import "core:os"
+import "core:fmt"
+import "core:strings"
 
 // =============================================================================
 // PREFAB ROOM TEMPLATES
@@ -14,8 +17,9 @@ import "core:math/rand"
 //   3. Provide functions to place prefabs in dungeons
 //   4. Algorithm can randomly select and position prefabs
 //
-// Future: Interactive editor (in actual game project)
-// Current: Code-based design, easy to iterate and test
+// Custom prefabs can be created with the interactive editor (E key) and are
+// saved to prefabs/*.prefab files. get_all_prefabs() loads both hardcoded
+// and disk-based prefabs into a single catalog.
 // =============================================================================
 
 PrefabTemplate :: struct {
@@ -24,8 +28,9 @@ PrefabTemplate :: struct {
 	tiles: []Tile_Type,  // Linear array; access as tiles[y * width + x]
 }
 
-// Helper: Create tile array from row-major data
-// Pass as: ...make_prefab(name, width, height, wall, wall, floor, ...)
+// make_prefab allocates a heap-owned PrefabTemplate from row-major tile data.
+// All templates returned by get_all_prefabs() are heap-owned and must be
+// freed via free_prefab_catalog().
 make_prefab :: proc(name: cstring, width, height: int, args: ..Tile_Type) -> PrefabTemplate {
 	tiles := make([]Tile_Type, width * height)
 	for i in 0..<min(len(args), width * height) {
@@ -34,14 +39,27 @@ make_prefab :: proc(name: cstring, width, height: int, args: ..Tile_Type) -> Pre
 	return PrefabTemplate{name = name, width = width, height = height, tiles = tiles}
 }
 
+// free_prefab_catalog frees all tile slices and the catalog array itself.
+// Call this wherever get_all_prefabs() result goes out of scope.
+// Do NOT call delete() on the catalog directly — that leaks the tile slices.
+free_prefab_catalog :: proc(prefabs: [dynamic]PrefabTemplate) {
+	for p in prefabs {
+		delete(p.tiles)
+	}
+	delete(prefabs)
+}
+
 // =============================================================================
 // PREFAB CATALOG
 // =============================================================================
-// Each prefab shows ASCII art first, then tile definition
+// Each prefab shows ASCII art first, then tile definition.
 // ASCII: # = Wall, . = Floor
+//
+// These are the hardcoded built-in prefabs. Custom prefabs from the editor
+// are loaded from prefabs/*.prefab files at generation time.
 // =============================================================================
 
-// BOSS_ROOM: Grand circular chamber
+// BOSS_ROOM: Grand open chamber
 // Layout:
 //   #########
 //   #.......#
@@ -50,168 +68,185 @@ make_prefab :: proc(name: cstring, width, height: int, args: ..Tile_Type) -> Pre
 //   #.......#
 //   #.......#
 //   #########
-PREFAB_BOSS_ROOM := PrefabTemplate{
-	name = "Boss Room",
-	width = 9, height = 7,
-	tiles = []Tile_Type{
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-	},
-}
+W :: Tile_Type.Wall
+F :: Tile_Type.Floor
 
-// TREASURE_VAULT: Small, protected chamber
-// Layout:
-//   #########
-//   #.......#
-//   #.......#
-//   #...T...#  (T=treasure)
-//   #.......#
-//   #########
-PREFAB_TREASURE_VAULT := PrefabTemplate{
-	name = "Treasure Vault",
-	width = 9, height = 6,
-	tiles = []Tile_Type{
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-	},
-}
-
-// GUARD_CHAMBER: Structured room with alcoves
-// Layout:
-//   ###########
-//   #...#...#.#
-//   #...#...#.#
-//   #.........#
-//   #...#...#.#
-//   #...#...#.#
-//   ###########
-PREFAB_GUARD_CHAMBER := PrefabTemplate{
-	name = "Guard Chamber",
-	width = 11, height = 7,
-	tiles = []Tile_Type{
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Wall, .Floor, .Floor, .Floor, .Wall, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Wall, .Floor, .Floor, .Floor, .Wall, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Wall, .Floor, .Floor, .Floor, .Wall, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Wall, .Floor, .Floor, .Floor, .Wall, .Floor, .Wall,
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-	},
-}
-
-// THRONE_ROOM: Long grand chamber with elevated center
-// Layout:
-//   #############
-//   #.....#.....#
-//   #.....#.....#
-//   #.....#.....#
-//   #.###.....###
-//   #.###.....###
-//   #############
-PREFAB_THRONE_ROOM := PrefabTemplate{
-	name = "Throne Room",
-	width = 13, height = 7,
-	tiles = []Tile_Type{
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Wall, .Wall, .Wall, .Floor, .Floor, .Floor, .Floor, .Wall, .Wall, .Wall, .Wall,
-		.Wall, .Floor, .Wall, .Wall, .Wall, .Floor, .Floor, .Floor, .Floor, .Wall, .Wall, .Wall, .Wall,
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-	},
-}
-
-// LIBRARY: Study with shelving
-// Layout:
-//   #########
-//   #.#.#.#.#
-//   #.#.#.#.#
-//   #.......#
-//   #.#.#.#.#
-//   #.#.#.#.#
-//   #########
-PREFAB_LIBRARY := PrefabTemplate{
-	name = "Library",
-	width = 9, height = 7,
-	tiles = []Tile_Type{
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-		.Wall, .Floor, .Wall, .Floor, .Wall, .Floor, .Wall, .Floor, .Wall,
-		.Wall, .Floor, .Wall, .Floor, .Wall, .Floor, .Wall, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Wall, .Floor, .Wall, .Floor, .Wall, .Floor, .Wall,
-		.Wall, .Floor, .Wall, .Floor, .Wall, .Floor, .Wall, .Floor, .Wall,
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-	},
-}
-
-// ARMORY: Weapon storage with racks
-// Layout:
-//   #########
-//   #.......#
-//   ###.###.#
-//   #.......#
-//   #.###.###
-//   #.......#
-//   #########
-PREFAB_ARMORY := PrefabTemplate{
-	name = "Armory",
-	width = 9, height = 7,
-	tiles = []Tile_Type{
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Wall, .Wall, .Floor, .Wall, .Wall, .Wall, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Wall, .Wall, .Wall, .Floor, .Wall, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-	},
-}
-
-// SLEEPING_QUARTERS: Dormitory with beds
-// Layout:
-//   ###########
-//   #..#..#..#
-//   #..#..#..#
-//   #.........#
-//   #..#..#..#
-//   #..#..#..#
-//   ###########
-PREFAB_SLEEPING_QUARTERS := PrefabTemplate{
-	name = "Sleeping Quarters",
-	width = 11, height = 7,
-	tiles = []Tile_Type{
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Wall, .Floor, .Floor, .Wall, .Floor, .Floor, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Wall, .Floor, .Floor, .Wall, .Floor, .Floor, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Floor, .Wall,
-		.Wall, .Floor, .Floor, .Wall, .Floor, .Floor, .Wall, .Floor, .Floor, .Wall, .Wall,
-		.Wall, .Floor, .Floor, .Wall, .Floor, .Floor, .Wall, .Floor, .Floor, .Wall, .Wall,
-		.Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall, .Wall,
-	},
-}
-
-// PREFAB REGISTRY: All available prefabs
-// Add new prefabs here to make them available for placement
+// get_all_prefabs returns the full prefab catalog: hardcoded built-ins plus
+// any .prefab files found in the prefabs/ directory.
+//
+// All returned PrefabTemplate.tiles slices are heap-allocated.
+// Caller MUST free with free_prefab_catalog() to avoid leaking tile memory.
 get_all_prefabs :: proc() -> [dynamic]PrefabTemplate {
 	prefabs := make([dynamic]PrefabTemplate)
-	append(&prefabs, PREFAB_BOSS_ROOM)
-	append(&prefabs, PREFAB_TREASURE_VAULT)
-	append(&prefabs, PREFAB_GUARD_CHAMBER)
-	append(&prefabs, PREFAB_THRONE_ROOM)
-	append(&prefabs, PREFAB_LIBRARY)
-	append(&prefabs, PREFAB_ARMORY)
-	append(&prefabs, PREFAB_SLEEPING_QUARTERS)
+
+	// Built-in prefabs — constructed via make_prefab() so tiles are heap-owned
+	// and uniformly freeable alongside disk-loaded prefabs.
+
+	// Boss Room: 9×7 open grand chamber
+	append(&prefabs, make_prefab("Boss Room", 9, 7,
+		W, W, W, W, W, W, W, W, W,
+		W, F, F, F, F, F, F, F, W,
+		W, F, F, F, F, F, F, F, W,
+		W, F, F, F, F, F, F, F, W,
+		W, F, F, F, F, F, F, F, W,
+		W, F, F, F, F, F, F, F, W,
+		W, W, W, W, W, W, W, W, W,
+	))
+
+	// Treasure Vault: 9×6 compact protected chamber
+	append(&prefabs, make_prefab("Treasure Vault", 9, 6,
+		W, W, W, W, W, W, W, W, W,
+		W, F, F, F, F, F, F, F, W,
+		W, F, F, F, F, F, F, F, W,
+		W, F, F, F, F, F, F, F, W,
+		W, F, F, F, F, F, F, F, W,
+		W, W, W, W, W, W, W, W, W,
+	))
+
+	// Guard Chamber: 11×7 room with alcoves
+	//   ###########
+	//   #...#...#.#
+	//   #...#...#.#
+	//   #.........#
+	//   #...#...#.#
+	//   #...#...#.#
+	//   ###########
+	append(&prefabs, make_prefab("Guard Chamber", 11, 7,
+		W, W, W, W, W, W, W, W, W, W, W,
+		W, F, F, F, W, F, F, F, W, F, W,
+		W, F, F, F, W, F, F, F, W, F, W,
+		W, F, F, F, F, F, F, F, F, F, W,
+		W, F, F, F, W, F, F, F, W, F, W,
+		W, F, F, F, W, F, F, F, W, F, W,
+		W, W, W, W, W, W, W, W, W, W, W,
+	))
+
+	// Throne Room: 13×7 long chamber with raised dais
+	//   #############
+	//   #.....#.....#
+	//   #.....#.....#
+	//   #.....#.....#
+	//   #.###.....###
+	//   #.###.....###
+	//   #############
+	append(&prefabs, make_prefab("Throne Room", 13, 7,
+		W, W, W, W, W, W, W, W, W, W, W, W, W,
+		W, F, F, F, F, F, W, F, F, F, F, F, W,
+		W, F, F, F, F, F, W, F, F, F, F, F, W,
+		W, F, F, F, F, F, W, F, F, F, F, F, W,
+		W, F, W, W, W, F, F, F, F, W, W, W, W,
+		W, F, W, W, W, F, F, F, F, W, W, W, W,
+		W, W, W, W, W, W, W, W, W, W, W, W, W,
+	))
+
+	// Library: 9×7 with reading alcoves (pillar pattern)
+	//   #########
+	//   #.#.#.#.#
+	//   #.#.#.#.#
+	//   #.......#
+	//   #.#.#.#.#
+	//   #.#.#.#.#
+	//   #########
+	append(&prefabs, make_prefab("Library", 9, 7,
+		W, W, W, W, W, W, W, W, W,
+		W, F, W, F, W, F, W, F, W,
+		W, F, W, F, W, F, W, F, W,
+		W, F, F, F, F, F, F, F, W,
+		W, F, W, F, W, F, W, F, W,
+		W, F, W, F, W, F, W, F, W,
+		W, W, W, W, W, W, W, W, W,
+	))
+
+	// Armory: 9×7 with weapon racks (horizontal barriers)
+	//   #########
+	//   #.......#
+	//   ###.###.#
+	//   #.......#
+	//   #.###.###
+	//   #.......#
+	//   #########
+	append(&prefabs, make_prefab("Armory", 9, 7,
+		W, W, W, W, W, W, W, W, W,
+		W, F, F, F, F, F, F, F, W,
+		W, W, W, F, W, W, W, F, W,
+		W, F, F, F, F, F, F, F, W,
+		W, F, W, W, W, F, W, W, W,
+		W, F, F, F, F, F, F, F, W,
+		W, W, W, W, W, W, W, W, W,
+	))
+
+	// Sleeping Quarters: 11×7 dormitory with bunk alcoves
+	//   ###########
+	//   #..#..#..##
+	//   #..#..#..##
+	//   #.........#
+	//   #..#..#..##
+	//   #..#..#..##
+	//   ###########
+	append(&prefabs, make_prefab("Sleeping Quarters", 11, 7,
+		W, W, W, W, W, W, W, W, W, W, W,
+		W, F, F, W, F, F, W, F, F, W, W,
+		W, F, F, W, F, F, W, F, F, W, W,
+		W, F, F, F, F, F, F, F, F, F, W,
+		W, F, F, W, F, F, W, F, F, W, W,
+		W, F, F, W, F, F, W, F, F, W, W,
+		W, W, W, W, W, W, W, W, W, W, W,
+	))
+
+	// Disk-loaded custom prefabs from prefabs/*.prefab
+	disk := load_prefabs_from_disk()
+	for p in disk { append(&prefabs, p) }
+	delete(disk)  // array only; tiles now owned by prefabs entries
+
 	return prefabs
+}
+
+// load_prefabs_from_disk scans the prefabs/ directory for *.prefab files
+// and returns them as heap-allocated PrefabTemplates.
+// Returns an empty array (not nil) if the directory doesn't exist or is empty.
+//
+// .prefab file format:
+//   { "name": "...", "width": N, "height": N, "tiles": "WWFF..." }
+load_prefabs_from_disk :: proc() -> [dynamic]PrefabTemplate {
+	result := make([dynamic]PrefabTemplate)
+
+	handle, err := os.open("prefabs")
+	if err != nil { return result }
+	defer os.close(handle)
+
+	entries, read_err := os.read_dir(handle, -1, context.allocator)
+	if read_err != nil { return result }
+	defer os.file_info_slice_delete(entries, context.allocator)
+
+	for entry in entries {
+		if !strings.has_suffix(entry.name, ".prefab") { continue }
+
+		path := fmt.tprintf("prefabs/%s", entry.name)
+		data, file_err := os.read_entire_file_from_path(path, context.allocator)
+		if file_err != nil { continue }
+		defer delete(data)
+
+		content := string(data)
+		name    := extract_string_field(content, "name")
+		w       := extract_int_field(content, "width")
+		h       := extract_int_field(content, "height")
+		tiles_s := extract_string_field(content, "tiles")
+
+		if w <= 0 || h <= 0 || len(tiles_s) < w * h { continue }
+
+		// Decode tile string into a temporary slice, then copy via make_prefab
+		tile_args := make([]Tile_Type, w * h)
+		defer delete(tile_args)
+		for i in 0..<w*h {
+			tile_args[i] = tiles_s[i] == 'F' ? .Floor : .Wall
+		}
+
+		// Clone the name string — it points into `data` which is deferred-freed
+		name_c := strings.clone_to_cstring(name)
+		append(&result, make_prefab(name_c, w, h, ..tile_args))
+	}
+
+	return result
 }
 
 // place_prefab carves a prefab into the dungeon at (x, y)
@@ -240,9 +275,9 @@ place_prefab :: proc(dungeon: ^Dungeon_Map, prefab: PrefabTemplate, x, y: int) -
 	return true
 }
 
-// place_random_prefabs scatters N random prefabs into the dungeon
-// Simple placement: tries random positions, skips if doesn't fit
-// No overlap checking (advanced feature for later)
+// place_random_prefabs scatters N random prefabs into the dungeon.
+// Simple placement: tries random positions, skips if doesn't fit.
+// No overlap checking (prefabs can overlap, creating interesting merged shapes).
 //
 // Parameters:
 //   dungeon: Dungeon to fill
@@ -251,7 +286,7 @@ place_prefab :: proc(dungeon: ^Dungeon_Map, prefab: PrefabTemplate, x, y: int) -
 // Returns number of prefabs actually placed
 place_random_prefabs :: proc(dungeon: ^Dungeon_Map, count: int) -> int {
 	prefabs := get_all_prefabs()
-	defer delete(prefabs)
+	defer free_prefab_catalog(prefabs)  // frees tile slices + array
 
 	placed := 0
 	attempts := 0

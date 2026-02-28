@@ -76,6 +76,11 @@ main :: proc() {
 	// Flag to regenerate comparison dungeons only when needed
 	regenerate_comparison := true
 
+	// Prefab editor
+	editor: PrefabEditor
+	init_prefab_editor(&editor)
+	defer free_prefab_editor(&editor)
+
 	// Save counter for exported dungeons
 	save_count := 0
 
@@ -172,6 +177,11 @@ main :: proc() {
 			regenerate_comparison = true  // Need to regenerate when entering comparison mode
 		}
 
+		// E: Toggle prefab editor
+		if rl.IsKeyPressed(.E) {
+			editor.active = !editor.active
+		}
+
 		// P: Toggle parameter panel
 		if rl.IsKeyPressed(.P) {
 			param_panel.enabled = !param_panel.enabled
@@ -255,45 +265,53 @@ main :: proc() {
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
 
-		// Set up scaling camera for fullscreen
-		// Calculate scale to fill window while maintaining aspect ratio
-		if !comparison_mode {
-			window_w := f32(rl.GetScreenWidth())
-			window_h := f32(rl.GetScreenHeight())
-			scale := min(window_w / f32(SCREEN_W), window_h / f32(SCREEN_H))
-
-			camera := rl.Camera2D{
-				offset = {window_w / 2, window_h / 2},
-				target = {f32(SCREEN_W) / 2, f32(SCREEN_H) / 2},
-				rotation = 0,
-				zoom = scale,
+		if editor.active {
+			// Prefab editor takes over the full screen
+			if update_prefab_editor(&editor) {
+				editor.active = false
 			}
-			rl.BeginMode2D(camera)
-			draw_single_view(&dungeon, spawn, room_tags, entity_markers, val_result, algorithm)
-			rl.EndMode2D()
+			draw_prefab_editor(&editor)
 		} else {
-			draw_comparison_mode_cached(comparison_dungeons, comparison_spawns, comparison_tags, comparison_markers)
-		}
+			// Set up scaling camera for fullscreen
+			// Calculate scale to fill window while maintaining aspect ratio
+			if !comparison_mode {
+				window_w := f32(rl.GetScreenWidth())
+				window_h := f32(rl.GetScreenHeight())
+				scale := min(window_w / f32(SCREEN_W), window_h / f32(SCREEN_H))
 
-		// Draw parameter panel OUTSIDE camera so mouse hit detection is in screen space
-		draw_parameter_panel(param_panel)
+				camera := rl.Camera2D{
+					offset = {window_w / 2, window_h / 2},
+					target = {f32(SCREEN_W) / 2, f32(SCREEN_H) / 2},
+					rotation = 0,
+					zoom = scale,
+				}
+				rl.BeginMode2D(camera)
+				draw_single_view(&dungeon, spawn, room_tags, entity_markers, val_result, algorithm)
+				rl.EndMode2D()
+			} else {
+				draw_comparison_mode_cached(comparison_dungeons, comparison_spawns, comparison_tags, comparison_markers)
+			}
 
-		// Shared UI elements
-		help_text := comparison_mode ? "C: Single View | F: Fullscreen | Space: Regen" : "Space: Regen | 1-5: Algos | S: Save | P: Parameters | C: Compare | F: Fullscreen"
-		rl.DrawText(fmt.ctprintf("%s", help_text), 10, 10, 14, rl.GRAY)
+			// Draw parameter panel OUTSIDE camera so mouse hit detection is in screen space
+			draw_parameter_panel(param_panel)
 
-		// Legend for spawn, entity, and room type markers
-		rl.DrawText("🟩 Start 🟥 End | 🟧 Enemy 🟨 Treasure | [B]oss [T]reasure [S]afe rooms (BSP) | Connectivity auto-checked", 10, 30, 14, rl.GRAY)
+			// Shared UI elements
+			help_text := comparison_mode ? "C: Single View | F: Fullscreen | Space: Regen" : "Space: Regen | 1-5: Algos | S: Save | P: Params | C: Compare | F: Fullscreen | E: Prefab Editor"
+			rl.DrawText(fmt.ctprintf("%s", help_text), 10, 10, 14, rl.GRAY)
 
-		// Seed display
-		seed_mode_text := use_seed ? "FIXED" : "RANDOM"
-		rl.DrawText(
-			fmt.ctprintf("Seed: %d (%s) | ↑↓: Adjust | R: Toggle", seed, seed_mode_text),
-			10, 50, 14, use_seed ? rl.YELLOW : rl.GRAY,
-		)
+			// Legend for spawn, entity, and room type markers
+			rl.DrawText("🟩 Start 🟥 End | 🟧 Enemy 🟨 Treasure | [B]oss [T]reasure [S]afe rooms (BSP) | Connectivity auto-checked", 10, 30, 14, rl.GRAY)
 
-		if comparison_mode {
-			rl.DrawText("COMPARISON MODE (4 algorithms)", 10, 70, 16, rl.YELLOW)
+			// Seed display
+			seed_mode_text := use_seed ? "FIXED" : "RANDOM"
+			rl.DrawText(
+				fmt.ctprintf("Seed: %d (%s) | ↑↓: Adjust | R: Toggle", seed, seed_mode_text),
+				10, 50, 14, use_seed ? rl.YELLOW : rl.GRAY,
+			)
+
+			if comparison_mode {
+				rl.DrawText("COMPARISON MODE (4 algorithms)", 10, 70, 16, rl.YELLOW)
+			}
 		}
 
 		rl.EndDrawing()

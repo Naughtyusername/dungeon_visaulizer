@@ -48,22 +48,21 @@
   - Scales dungeon to fill screen
   - Works at any resolution
 
-## High-Value Next (Milestone 4)
+## Completed (Milestone 4)
 
 ### User Interface
-- **Interactive Prefab Editor**
-  - Visual room designer within the visualizer
-  - Paint tiles, save as prefab template
-  - Export prefabs to code
-  - **Impact:** Remove manual code editing for room design
-  - **Effort:** 2-3 hours
+- ✅ **Interactive Prefab Editor (E key)**
+  - Visual tile-painting canvas (up to 24×24)
+  - Left/right click to paint floor/wall, drag to paint
+  - Arrow keys resize canvas, C to clear, S to save
+  - Saves to `prefabs/*.prefab` files (JSON format)
+  - Disk prefabs auto-loaded into Prefab algorithm at generation time
 
 ### Game Integration
-- **Room Type System**
-  - Tag rooms as boss, treasure, safe zone, etc.
-  - Export room metadata with dungeon
-  - Helps game engine place entities
-  - **Effort:** 1-2 hours
+- ✅ **Room Type System**
+  - Boss/Treasure/Safe room tagging on BSP dungeons
+  - Colored outlines + labels in visualizer
+  - Type exported in `.dun` room metadata
 
 ## Nice-to-Have (Future)
 - Multi-floor dungeon generation (vertical connectivity)

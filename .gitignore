@@ -1,5 +1,6 @@
 # Ignore the binary named 'roguelike' at the root
 /dv
+dungeon
 
 # Standard Odin ignores
 *.bin
