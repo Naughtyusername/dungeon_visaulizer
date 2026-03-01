@@ -23,10 +23,10 @@ SCREEN_H   :: MAP_HEIGHT * TILE_SIZE   // 720
 FLOOR_TARGET :: int(f32(MAP_WIDTH * MAP_HEIGHT) * 0.35)
 
 // Tile_Type enum defines dungeon cell states
-// Wall=0 (zero-initialized), Floor=1
-// Critical: zero-initialization means freshly allocated grids are all Walls
-// Do NOT reorder enum — breaks assumptions throughout generators
-Tile_Type :: enum { Wall, Floor }
+// Wall=0 (zero-initialized), Floor=1, Door=2
+// Critical: Wall MUST remain the zero value — freshly allocated grids are all Walls
+// Do NOT reorder enum — breaks zero-initialization assumptions throughout generators
+Tile_Type :: enum { Wall, Floor, Door }
 
 // Room_Type gives semantic meaning to BSP rooms for game design purposes.
 // Critical: Normal MUST be the zero value (first entry) so all Room{} literals

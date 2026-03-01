@@ -27,12 +27,17 @@ SPAWN_DEFAULT_CONFIG :: SpawnConfig{
 	min_distance = 25,  // ~5x5 room separation at minimum
 }
 
-// place_spawn_points finds valid start/end locations in a dungeon
-// Strategy:
-//   1. Pick start from largest open area (usually center floor region)
-//   2. Do floodfill from start to find reachable tiles
-//   3. Pick end from farthest reachable point (greedy max distance)
-//   4. Validate both are on floor and far enough apart
+// place_spawn_points finds valid start/end locations in a dungeon.
+// Strategy — double-BFS (finds near-optimal diameter, no center bias):
+//   1. Find any floor tile as a throwaway seed (top-left scan)
+//   2. BFS from seed → farthest reachable floor tile = start (one extreme)
+//   3. BFS from start → farthest reachable floor tile = end (opposite extreme)
+//   4. Validate distance meets minimum separation
+//
+// Why double-BFS instead of "prefer center":
+//   Single-pass from center always placed stairs at center for DW (the walker
+//   starts there) and BSP (corridors pass through center). Double-BFS finds
+//   the actual diameter of the dungeon regardless of shape or algorithm.
 //
 // Parameters:
 //   dungeon: Fully generated dungeon
@@ -45,66 +50,38 @@ place_spawn_points :: proc(
 ) -> SpawnPoints {
 	result := SpawnPoints{valid = false}
 
-	// Find a floor tile to start from (prefer center area)
-	start_x, start_y := find_best_start_point(dungeon)
-	if dungeon.tiles[start_y][start_x] == .Wall {
-		return result  // No valid start found
+	// Pass 1: seed BFS from any floor tile (top-left scan, no center bias)
+	seed_x, seed_y := find_any_floor(dungeon)
+	if dungeon.tiles[seed_y][seed_x] != .Floor {
+		return result
+	}
+
+	// Pass 2: BFS from seed → finds one extreme of the dungeon = start (up stairs)
+	start_x, start_y := find_farthest_point(dungeon, seed_x, seed_y)
+	if dungeon.tiles[start_y][start_x] != .Floor {
+		return result
+	}
+
+	// Pass 3: BFS from start → finds the opposite extreme = end (down stairs)
+	end_x, end_y := find_farthest_point(dungeon, start_x, start_y)
+	if dungeon.tiles[end_y][end_x] != .Floor {
+		return result
 	}
 
 	result.start_x = start_x
 	result.start_y = start_y
-
-	// Find end point: farthest floor from start using BFS distance
-	end_x, end_y := find_farthest_point(dungeon, start_x, start_y)
-	if dungeon.tiles[end_y][end_x] == .Wall {
-		return result  // No valid end found
-	}
-
-	result.end_x = end_x
-	result.end_y = end_y
-
-	// Calculate distance (Manhattan)
+	result.end_x   = end_x
+	result.end_y   = end_y
 	result.distance = abs(end_x - start_x) + abs(end_y - start_y)
-
-	// Valid only if:
-	//   1. Both are on floor (checked above)
-	//   2. Far enough apart
-	result.valid = (result.distance >= config.min_distance)
+	result.valid    = (result.distance >= config.min_distance)
 
 	return result
 }
 
-// find_best_start_point locates a good starting position
-// Prefers center area, looks for open floor tiles
-// Falls back to spiral search if center is blocked
-find_best_start_point :: proc(dungeon: ^Dungeon_Map) -> (int, int) {
-	center_x := dungeon.width / 2
-	center_y := dungeon.height / 2
-
-	// Try center first
-	if dungeon.tiles[center_y][center_x] == .Floor {
-		return center_x, center_y
-	}
-
-	// Spiral search from center
-	for radius in 1..<max(dungeon.width, dungeon.height) {
-		for dy in -radius..=radius {
-			for dx in -radius..=radius {
-				if max(abs(dx), abs(dy)) != radius {
-					continue  // Only check outer ring
-				}
-				x := center_x + dx
-				y := center_y + dy
-				if x >= 0 && x < dungeon.width && y >= 0 && y < dungeon.height {
-					if dungeon.tiles[y][x] == .Floor {
-						return x, y
-					}
-				}
-			}
-		}
-	}
-
-	// Fallback: brute force first floor tile
+// find_any_floor returns the first floor tile found by top-left scan.
+// Used as a bias-free seed for the double-BFS spawn placement.
+// Does NOT prefer center — that's intentional to avoid the center-bias bug.
+find_any_floor :: proc(dungeon: ^Dungeon_Map) -> (int, int) {
 	for y in 0..<dungeon.height {
 		for x in 0..<dungeon.width {
 			if dungeon.tiles[y][x] == .Floor {
@@ -112,7 +89,6 @@ find_best_start_point :: proc(dungeon: ^Dungeon_Map) -> (int, int) {
 			}
 		}
 	}
-
 	return 0, 0
 }
 
@@ -164,9 +140,12 @@ find_farthest_point :: proc(dungeon: ^Dungeon_Map, start_x, start_y: int) -> (in
 		for neighbor in neighbors {
 			nx, ny := neighbor.x, neighbor.y
 			if nx >= 0 && nx < dungeon.width && ny >= 0 && ny < dungeon.height {
-				if dungeon.tiles[ny][nx] == .Floor && dist[ny][nx] == -1 {
+				// Traverse floor AND door tiles — doors are passable
+				// Only update farthest when on actual floor (not doorway)
+				tile := dungeon.tiles[ny][nx]
+				if (tile == .Floor || tile == .Door) && dist[ny][nx] == -1 {
 					dist[ny][nx] = d + 1
-					if dist[ny][nx] > max_dist {
+					if dist[ny][nx] > max_dist && tile == .Floor {
 						max_dist = dist[ny][nx]
 						farthest_x = nx
 						farthest_y = ny

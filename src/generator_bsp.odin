@@ -90,6 +90,9 @@ make_dungeon_bsp :: proc(config := BSP_DEFAULT_CONFIG) -> Dungeon_Map {
 	// Free BSP tree (no longer needed after generation)
 	bsp_free(root)
 
+	// Place doors at corridor-room chokepoints
+	place_doors(&dungeon)
+
 	return dungeon
 }
 

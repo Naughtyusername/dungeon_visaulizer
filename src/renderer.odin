@@ -5,16 +5,23 @@ import "core:fmt"
 
 COLOR_WALL    :: rl.Color{30,  30,  35,  255}
 COLOR_FLOOR   :: rl.Color{140, 120, 100, 255}
-COLOR_START   :: rl.Color{0,   255, 0,   255}  // Green for player start
-COLOR_END     :: rl.Color{255, 0,   0,   255}  // Red for goal/end
-COLOR_ROOM    :: rl.Color{100, 100, 150, 100} // Blue overlay for rooms
+COLOR_DOOR    :: rl.Color{160, 110,  50, 255}  // Warm wood brown for doors
+COLOR_START   :: rl.Color{0,   200, 0,   255}  // Green for up stairs (player start)
+COLOR_END     :: rl.Color{220, 0,   0,   255}  // Red for down stairs (exit/goal)
+COLOR_ROOM    :: rl.Color{100, 100, 150, 100}  // Blue overlay for rooms
 MARKER_SIZE   :: 12  // Pixel size of spawn markers
 
 // draw_dungeon renders the tile grid
+// Wall: dark charcoal | Floor: warm tan | Door: wood brown
 draw_dungeon :: proc(d: ^Dungeon_Map) {
 	for y in 0..<d.height {
 		for x in 0..<d.width {
-			color := COLOR_WALL if d.tiles[y][x] == .Wall else COLOR_FLOOR
+			color: rl.Color
+			switch d.tiles[y][x] {
+			case .Wall:  color = COLOR_WALL
+			case .Floor: color = COLOR_FLOOR
+			case .Door:  color = COLOR_DOOR
+			}
 			rl.DrawRectangle(
 				i32(x * TILE_SIZE), i32(y * TILE_SIZE),
 				i32(TILE_SIZE), i32(TILE_SIZE),
@@ -24,24 +31,27 @@ draw_dungeon :: proc(d: ^Dungeon_Map) {
 	}
 }
 
-// draw_spawn_points renders start (green) and end (red) markers
+// draw_spawn_points renders up-stairs (green <) and down-stairs (red >) markers
+// Conventional roguelike notation: < = stairs up (entry), > = stairs down (exit/deeper)
 // Call after draw_dungeon for layering
 draw_spawn_points :: proc(spawn: SpawnPoints) {
 	if !spawn.valid {
-		return  // Don't draw invalid spawn points
+		return
 	}
 
-	// Start marker (green)
+	// Up stairs / player start — green with < glyph
 	start_px := i32(spawn.start_x * TILE_SIZE + TILE_SIZE / 2 - MARKER_SIZE / 2)
 	start_py := i32(spawn.start_y * TILE_SIZE + TILE_SIZE / 2 - MARKER_SIZE / 2)
 	rl.DrawRectangle(start_px, start_py, i32(MARKER_SIZE), i32(MARKER_SIZE), COLOR_START)
 	rl.DrawRectangleLines(start_px - 1, start_py - 1, i32(MARKER_SIZE + 2), i32(MARKER_SIZE + 2), rl.LIME)
+	rl.DrawText("<", start_px + 2, start_py + 1, 10, rl.WHITE)
 
-	// End marker (red)
+	// Down stairs / goal — red with > glyph
 	end_px := i32(spawn.end_x * TILE_SIZE + TILE_SIZE / 2 - MARKER_SIZE / 2)
 	end_py := i32(spawn.end_y * TILE_SIZE + TILE_SIZE / 2 - MARKER_SIZE / 2)
 	rl.DrawRectangle(end_px, end_py, i32(MARKER_SIZE), i32(MARKER_SIZE), COLOR_END)
 	rl.DrawRectangleLines(end_px - 1, end_py - 1, i32(MARKER_SIZE + 2), i32(MARKER_SIZE + 2), rl.MAROON)
+	rl.DrawText(">", end_px + 2, end_py + 1, 10, rl.WHITE)
 }
 
 // draw_dungeon_stats displays dungeon information at bottom of screen

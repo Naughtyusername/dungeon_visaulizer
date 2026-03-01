@@ -3,6 +3,8 @@ package dungeon_visualizer
 import rl "vendor:raylib"
 import "core:fmt"
 import "core:math/rand"
+import "core:strconv"
+import "core:strings"
 
 Algorithm :: enum {
 	Drunkards_Walk,      // 1: Classic cave carver
@@ -171,10 +173,31 @@ main :: proc() {
 			rl.ToggleFullscreen()
 		}
 
-		// C: Toggle comparison mode
-		if rl.IsKeyPressed(.C) {
+		// C: Toggle comparison mode (guard against Ctrl+C which is seed copy)
+		ctrl_held := rl.IsKeyDown(.LEFT_CONTROL) || rl.IsKeyDown(.RIGHT_CONTROL)
+		if rl.IsKeyPressed(.C) && !ctrl_held {
 			comparison_mode = !comparison_mode
-			regenerate_comparison = true  // Need to regenerate when entering comparison mode
+			regenerate_comparison = true
+		}
+
+		// Ctrl+C: Copy current seed to clipboard (X11 clipboard — works within app
+		// and with X11 apps; Wayland-native apps use a separate clipboard)
+		if ctrl_held && rl.IsKeyPressed(.C) {
+			rl.SetClipboardText(fmt.ctprintf("%d", seed))
+		}
+
+		// Ctrl+V: Paste seed from clipboard
+		if ctrl_held && rl.IsKeyPressed(.V) {
+			clipboard := rl.GetClipboardText()
+			if clipboard != nil {
+				seed_str := strings.trim_space(string(clipboard))
+				if parsed, ok := strconv.parse_u64(seed_str); ok {
+					seed = parsed
+					use_seed = true
+					do_regenerate(algorithm, &dungeon, &spawn, &val_result, &room_tags, &entity_markers, seed, use_seed)
+					regenerate_comparison = true
+				}
+			}
 		}
 
 		// E: Toggle prefab editor
@@ -299,8 +322,8 @@ main :: proc() {
 			help_text := comparison_mode ? "C: Single View | F: Fullscreen | Space: Regen" : "Space: Regen | 1-5: Algos | S: Save | P: Params | C: Compare | F: Fullscreen | E: Prefab Editor"
 			rl.DrawText(fmt.ctprintf("%s", help_text), 10, 10, 14, rl.GRAY)
 
-			// Legend for spawn, entity, and room type markers
-			rl.DrawText("🟩 Start 🟥 End | 🟧 Enemy 🟨 Treasure | [B]oss [T]reasure [S]afe rooms (BSP) | Connectivity auto-checked", 10, 30, 14, rl.GRAY)
+			// Legend for spawn, entity, room type, and door markers
+			rl.DrawText("< Up Stairs  > Down Stairs | Enemy Treasure | [B]oss [T]reasure [S]afe (BSP) | Doors: BSP/Hybrid/Prefab | Ctrl+C/V: copy/paste seed", 10, 30, 14, rl.GRAY)
 
 			// Seed display
 			seed_mode_text := use_seed ? "FIXED" : "RANDOM"

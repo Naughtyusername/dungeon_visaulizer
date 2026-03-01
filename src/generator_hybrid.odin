@@ -80,6 +80,9 @@ make_dungeon_hybrid :: proc(config := HYBRID_DEFAULT_CONFIG) -> Dungeon_Map {
 		_ = val_result
 	}
 
+	// Place doors at corridor-room chokepoints
+	place_doors(&dungeon)
+
 	return dungeon
 }
 

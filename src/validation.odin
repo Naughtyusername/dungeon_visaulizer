@@ -45,11 +45,12 @@ validate_connectivity :: proc(
 		check_x, check_y = find_nearest_floor(dungeon)
 	}
 
-	// Count total floor tiles in dungeon
+	// Count total passable tiles (floor + door) in dungeon
+	// Door tiles are floor-equivalent for connectivity purposes
 	total_floors := 0
 	for y in 0..<dungeon.height {
 		for x in 0..<dungeon.width {
-			if dungeon.tiles[y][x] == .Floor {
+			if dungeon.tiles[y][x] == .Floor || dungeon.tiles[y][x] == .Door {
 				total_floors += 1
 			}
 		}
@@ -84,7 +85,7 @@ validate_connectivity :: proc(
 		result.reachable_tiles = 0
 		for y in 0..<dungeon.height {
 			for x in 0..<dungeon.width {
-				if dungeon.tiles[y][x] == .Floor {
+				if dungeon.tiles[y][x] == .Floor || dungeon.tiles[y][x] == .Door {
 					result.total_floor_tiles += 1
 				}
 			}
@@ -167,8 +168,8 @@ flood_fill_count :: proc(
 remove_isolated_regions :: proc(dungeon: ^Dungeon_Map, visited: [][]bool) {
 	for y in 0..<dungeon.height {
 		for x in 0..<dungeon.width {
-			// If it's a floor but not visited, fill it with wall
-			if dungeon.tiles[y][x] == .Floor && !visited[y][x] {
+			// If it's a passable tile (floor or door) but not visited, fill with wall
+			if (dungeon.tiles[y][x] == .Floor || dungeon.tiles[y][x] == .Door) && !visited[y][x] {
 				dungeon.tiles[y][x] = .Wall
 			}
 		}

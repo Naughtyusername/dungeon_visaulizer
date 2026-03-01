@@ -52,11 +52,16 @@ export_dungeon :: proc(dungeon: ^Dungeon_Map, filename: cstring, entity_markers 
 	fmt.sbprintf(&sb, "  \"width\": %d,\n", dungeon.width)
 	fmt.sbprintf(&sb, "  \"height\": %d,\n", dungeon.height)
 
-	// Tile grid: encode as string (W=wall, F=floor) for compactness
+	// Tile grid: encode as string (W=wall, F=floor, D=door) for compactness
 	fmt.sbprint(&sb, "  \"tiles\": \"")
 	for y in 0..<dungeon.height {
 		for x in 0..<dungeon.width {
-			tile_char := dungeon.tiles[y][x] == .Wall ? 'W' : 'F'
+			tile_char: rune
+			switch dungeon.tiles[y][x] {
+			case .Wall:  tile_char = 'W'
+			case .Floor: tile_char = 'F'
+			case .Door:  tile_char = 'D'
+			}
 			fmt.sbprintf(&sb, "%c", tile_char)
 		}
 		// Add newline in tile string for readability (optional)
@@ -151,7 +156,11 @@ import_dungeon :: proc(filename: cstring) -> Dungeon_Map {
 		for x in 0..<width {
 			if tiles_idx < len(tiles_str) {
 				char := tiles_str[tiles_idx]
-				dungeon.tiles[y][x] = char == 'W' ? .Wall : .Floor
+				switch char {
+				case 'F': dungeon.tiles[y][x] = .Floor
+				case 'D': dungeon.tiles[y][x] = .Door
+				case:     dungeon.tiles[y][x] = .Wall
+				}
 				tiles_idx += 1
 			}
 			// Skip newlines in tile string

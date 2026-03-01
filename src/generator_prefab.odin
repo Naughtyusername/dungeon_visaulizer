@@ -66,6 +66,9 @@ make_dungeon_prefab :: proc(config := PREFAB_DEFAULT_CONFIG) -> Dungeon_Map {
 	// Validate connectivity
 	validate_connectivity(&dungeon, MAP_WIDTH / 2, MAP_HEIGHT / 2, true)
 
+	// Place doors at corridor-room chokepoints
+	place_doors(&dungeon)
+
 	return dungeon
 }
 
